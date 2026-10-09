@@ -147,7 +147,7 @@ COMBO_MIN = 3
 ATTACK_KEYS = (pygame.K_x, pygame.K_j)
 SPECIAL_KEYS = (pygame.K_c, pygame.K_k)
 
-ATTACK_COOLDOWN_MS = 800  # Aumentat de 450ms a 800ms
+ATTACK_COOLDOWN_MS = 800  # Cooldown augmentat
 ATTACK_SPEED = 11
 ATTACK_LIFE_FRAMES = 45          # ~0,75 s de vol
 
@@ -323,7 +323,7 @@ def pokeball_points_for_level(level):
 FACE_CROP_HEIGHT = 0.5
 
 # ---------------------------------------------------------------
-# PLATAFORMES DEL BOSS (Paràmetres adaptats dinàmicament)
+# PLATAFORMES DEL BOSS
 # ---------------------------------------------------------------
 
 BOSS_PLATFORM_DAMAGE_SCALE = 0.55
@@ -1017,6 +1017,10 @@ class GameState:
         self.enemy_base_y = []
         self.enemy_phase = []
         self.enemy_ai = {}
+
+        # Llistes per a l'animació de mort i respawn d'enemics voladors
+        self.dying_enemies = []
+        self.respawning_enemies = []
 
         self._spawn_enemies()
         self._spawn_ground_enemy()
@@ -1982,9 +1986,6 @@ def fire_basic(gs, nom, d):
 
 
 def fire_special(gs, nom, d):
-    """
-    Atac especial (C / K). Temps de recàrrega augmentat.
-    """
 
     sid = SPECIAL_BY_CHAR.get(nom)
 
@@ -2010,7 +2011,7 @@ def fire_special(gs, nom, d):
             dmg=special_damage('cua', lvl), pierce=True, follow=True, w=reach, h=54
         )
 
-        return 1500 - 150 * (lvl - 1)  # Recàrrega augmentada
+        return 1500 - 150 * (lvl - 1)
 
     if sid == 'plasma':
 
@@ -2019,7 +2020,7 @@ def fire_special(gs, nom, d):
             dmg=special_damage('plasma', lvl), pierce=True, w=34, h=72
         )
 
-        return 1300 - 150 * (lvl - 1)  # Recàrrega augmentada
+        return 1300 - 150 * (lvl - 1)
 
     if sid == 'foc':
 
@@ -2029,7 +2030,7 @@ def fire_special(gs, nom, d):
             splash=(0, 0, 70, 110)[lvl]
         )
 
-        return 1700 - 150 * (lvl - 1)  # Recàrrega augmentada
+        return 1700 - 150 * (lvl - 1)
 
     return 0
 
@@ -2134,6 +2135,47 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
     gs.enemy_speeds[i] = d['dir'] * 3
 
 
+def update_dying_enemies(gs):
+    """Actualitza la posició i rotació dels enemics morts en animació de caiguda."""
+    for de in gs.dying_enemies[:]:
+        de['x'] += de['vx']
+        de['y'] += de['vy']
+        de['vy'] += de['gravity']
+        de['angle'] = (de['angle'] + de['rot_speed']) % 360
+        if de['y'] > HEIGHT + 120:
+            gs.dying_enemies.remove(de)
+
+
+def update_respawns(gs, now):
+    """Fes reaparèixer els enemics voladors un cop passen els 7 segons."""
+    for r in gs.respawning_enemies[:]:
+        if now >= r['respawn_at']:
+            gs._spawn_flyer(r['kind'], r['w'], r['h'])
+            gs.respawning_enemies.remove(r)
+
+
+def draw_dying_enemies(gs):
+    """Dibuixa els enemics caient i girant (sense hitbox)."""
+    for de in gs.dying_enemies:
+        k = de['kind']
+        flip = de['flip']
+        if k == GROUND_ENEMY_KIND:
+            frames = ground_frames[1 if flip else 0]
+            base_tex = frames[0] if frames else enemy_texture1
+        else:
+            base = (
+                enemy_texture2 if k == 1
+                else (enemy_chaser_texture if k == 3 else enemy_texture1)
+            )
+            base_tex = pygame.transform.flip(base, flip, False)
+
+        rot_img = pygame.transform.rotate(base_tex, de['angle'])
+        cx = de['x'] + de['w'] / 2
+        cy = de['y'] + de['h'] / 2
+        rect = rot_img.get_rect(center=(int(cx), int(cy)))
+        screen.blit(rot_img, rect.topleft)
+
+
 def hit_enemy(gs, i, dmg, color):
 
     e = gs.enemies[i]
@@ -2155,6 +2197,35 @@ def hit_enemy(gs, i, dmg, color):
             gravity=0.1
         )
         play_sfx('hit')
+
+        d = gs.enemy_ai.get(id(e), {})
+        kind = gs.enemy_kind[i]
+        facing_flip = (gs.enemy_speeds[i] < 0)
+
+        # Animació de mort: impuls cap amunt, gravetat i gir
+        gs.dying_enemies.append({
+            'x': float(e.x),
+            'y': float(e.y),
+            'vx': random.uniform(-2.5, 2.5),
+            'vy': -8.0,
+            'gravity': 0.5,
+            'angle': 0,
+            'rot_speed': random.choice([-18, -12, 12, 18]),
+            'kind': kind,
+            'flip': facing_flip,
+            'w': e.width,
+            'h': e.height
+        })
+
+        # Si és un enemic volador, programa la seva reaparició en 7 segons (7000 ms)
+        if kind != GROUND_ENEMY_KIND:
+            now = pygame.time.get_ticks()
+            gs.respawning_enemies.append({
+                'respawn_at': now + 7000,
+                'kind': kind,
+                'w': e.width,
+                'h': e.height
+            })
 
         gs.enemy_ai.pop(id(e), None)
 
@@ -2495,6 +2566,9 @@ def shift_boss_timers(gs, dt):
     for s in gs.boss_shots:
         if s['homing_until'] > 0:
             s['homing_until'] += dt
+
+    for r in gs.respawning_enemies:
+        r['respawn_at'] += dt
 
 
 # ===============================================================
@@ -5074,6 +5148,8 @@ async def game():
 
                             gs.alive = False
 
+                update_dying_enemies(gs)
+                update_respawns(gs, current_time)
                 update_attacks(gs, pygame.time.get_ticks())
 
                 if gs.is_boss:
@@ -5294,6 +5370,9 @@ async def game():
                 )
 
                 screen.blit(tex, (pokeball.x, pokeball.y))
+
+            # Dibuixem els enemics mortals (morts caient)
+            draw_dying_enemies(gs)
 
             for i, enemy in enumerate(gs.enemies):
 
