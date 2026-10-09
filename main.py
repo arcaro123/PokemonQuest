@@ -176,7 +176,22 @@ ENEMY_AI_CYCLE = ['patrol', 'sine', 'chaser']
 
 AI_KIND = {'patrol': 1, 'sine': 0, 'chaser': 3}   # quin sprite i vida fa servir cada tipus
 
-ENEMY_STOMP_DAMAGE = {0: 99, 1: 99, 2: 2, 3: 99}  # el llop aguanta 2 trepitjades
+# Mal en trepitjar un enemic (per tipus). Vida: abella 2, volador gran 3, llop 4, abella vermella 2
+ENEMY_STOMP_DAMAGE = {0: 1, 1: 1, 2: 1, 3: 1}
+
+# Mal de cada atac especial segons el nivell comprat (nivell 1, 2, 3).
+# Abans: cua 2/3/4, plasma 1/2/3, foc 2/3/3. Canvia aquests números per ajustar-ho.
+SPECIAL_DAMAGE = {
+    'cua':    [1, 2, 3],
+    'plasma': [1, 1, 2],
+    'foc':    [1, 2, 2],
+}
+
+
+def special_damage(sid, lvl):
+    table = SPECIAL_DAMAGE[sid]
+    return table[min(lvl, len(table)) - 1]
+
 
 # ---------------------------------------------------------------
 # [NOU7] DIFICULTAT
@@ -2051,7 +2066,7 @@ def fire_special(gs, nom, d):
 
         _add_attack(
             gs, 'bolt', px + d * (10 + reach // 2), py, d, 0, 0, 16, color,
-            dmg=lvl + 1, pierce=True, follow=True, w=reach, h=54
+            dmg=special_damage('cua', lvl), pierce=True, follow=True, w=reach, h=54
         )
 
         return 800 - 100 * (lvl - 1)
@@ -2061,7 +2076,7 @@ def fire_special(gs, nom, d):
 
         _add_attack(
             gs, 'ring', px + d * 24, py, d, 0, 14 + lvl, 70, color,
-            dmg=1 + (lvl >= 2) + (lvl >= 3), pierce=True, w=34, h=72
+            dmg=special_damage('plasma', lvl), pierce=True, w=34, h=72
         )
 
         return 700 - 100 * (lvl - 1)
@@ -2071,7 +2086,7 @@ def fire_special(gs, nom, d):
 
         _add_attack(
             gs, 'fire', px + d * 24, py, d, 26 + 4 * lvl, 9, 80, color,
-            dmg=2 if lvl == 1 else 3,
+            dmg=special_damage('foc', lvl),
             splash=(0, 0, 70, 110)[lvl]
         )
 
