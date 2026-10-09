@@ -1,36 +1,40 @@
-# Versió preparada per al navegador (pygbag / WebAssembly) i també per a l'escriptori.
 import asyncio
 import json
 import math
 import os
 import random
-import sys
 import time
+
+import sys
 
 import pygame
 
-# True quan el joc corre dins el navegador
-IS_WEB = sys.platform == 'emscripten'
+# Fa que els recursos ('assets/...') es trobin sempre, es llanci el joc des d'on
+# es llanci, i també quan està empaquetat amb PyInstaller.
+try:
+    os.chdir(getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__))))
+except (NameError, OSError):
+    pass
 
 
-def music_file(path):
-    """Al navegador l'mp3 no sol funcionar: si hi ha un .ogg amb el mateix nom, el fem servir."""
+def music_file(name):
+    """Prefereix .ogg: els navegadors (versió web) no llegeixen bé els .mp3."""
 
-    ogg = os.path.splitext(path)[0] + '.ogg'
+    for ext in ('ogg', 'mp3'):
+        path = f'assets/{name}.{ext}'
+        if os.path.exists(path):
+            return path
 
-    if os.path.exists(ogg):
-        return ogg
-
-    return path
+    return f'assets/{name}.mp3'
 
 
 pygame.init()
 
 try:
-    pygame.mixer.music.load(music_file('assets/musica2.mp3'))
+    pygame.mixer.music.load(music_file('musica2'))
     pygame.mixer.music.play(-1)
-except (pygame.error, FileNotFoundError):
-    pass
+except pygame.error as e:
+    print('Música no disponible:', e)
 
 WIDTH, HEIGHT = 1024, 720
 AMPLADA, ALTURA = WIDTH, HEIGHT
@@ -57,32 +61,14 @@ def imprimir_pantalla_fons(image):
 _boss_fonts = {}
 
 
-FONT_FILE = 'assets/font.ttf'      # opcional: una font pròpia (recomanat per al navegador)
-
-
 def _font(size, bold=False):
-
     key = (size, bold)
-
     if key not in _boss_fonts:
-
-        if os.path.exists(FONT_FILE):
-
-            f = pygame.font.Font(FONT_FILE, size)
-            f.set_bold(bold)
-
-        elif IS_WEB:
-
-            # Al navegador no hi ha Arial: font per defecte una mica més gran
-            f = pygame.font.Font(None, int(size * 1.3))
-            f.set_bold(bold)
-
-        else:
-
-            f = pygame.font.SysFont('Arial', size, bold=bold)
-
-        _boss_fonts[key] = f
-
+        try:
+            _boss_fonts[key] = pygame.font.SysFont('Arial', size, bold=bold)
+        except Exception:
+            # Al navegador no hi ha fonts del sistema: fem servir la per defecte
+            _boss_fonts[key] = pygame.font.Font(None, int(size * 1.3))
     return _boss_fonts[key]
 
 
@@ -178,83 +164,6 @@ AI_KIND = {'patrol': 1, 'sine': 0, 'chaser': 3}   # quin sprite i vida fa servir
 
 ENEMY_STOMP_DAMAGE = {0: 99, 1: 99, 2: 2, 3: 99}  # el llop aguanta 2 trepitjades
 
-# ---------------------------------------------------------------
-# [NOU7] DIFICULTAT
-#
-#   mode 'frac'  -> es queda aquesta fracció dels enemics (mínim 1)
-#   mode 'minus' -> treu 'remove' enemics, però mai més del 50 %
-#   mode 'all'   -> tots els enemics (com el joc original)
-#
-#   speed       -> multiplicador de velocitat dels enemics
-#   hp          -> multiplicador de vida dels enemics
-#   wolf_hp     -> vida fixa del llop (None = la normal)
-#   chase       -> les abelles vermelles et persegueixen?
-#   wolf_chase  -> el llop et persegueix?
-#
-# La dificultat es tria en prémer JUGAR (pantalla de dificultat) o amb
-# la tecla D al menú, i es manté mentre el joc està obert.
-# ---------------------------------------------------------------
-
-DIFFICULTY_SETTINGS = {
-    'facil': {
-        'nom': 'FÀCIL', 'color': (80, 220, 100),
-        'desc': ["La meitat d'enemics", 'Vida al 50 %', 'Velocitat al 60 %',
-                 'Llop amb 1 de vida'],
-        'mode': 'frac', 'keep': 0.5,
-        'speed': 0.6, 'hp': 0.5, 'wolf_hp': 1,
-        'chase': False, 'wolf_chase': False, 'ground_enemy': True,
-    },
-    'normal': {
-        'nom': 'NORMAL', 'color': (255, 220, 60),
-        'desc': ['2 enemics menys', 'No et persegueixen', 'Vida normal',
-                 'Velocitat al 80 %'],
-        'mode': 'minus', 'remove': 2,
-        'speed': 0.8, 'hp': 1.0, 'wolf_hp': None,
-        'chase': False, 'wolf_chase': False, 'ground_enemy': True,
-    },
-    'dificil': {
-        'nom': 'DIFÍCIL', 'color': (255, 80, 80),
-        'desc': ['Tots els enemics', 'Velocitat màxima',
-                 'Perseguidors i llop', 'Com el joc original'],
-        'mode': 'all',
-        'speed': 1.0, 'hp': 1.0, 'wolf_hp': None,
-        'chase': True, 'wolf_chase': True, 'ground_enemy': True,
-    },
-}
-
-DIFFICULTY_ORDER = ['facil', 'normal', 'dificil']
-
-DIFFICULTY = {'key': 'normal'}       # dificultat activa
-
-
-def diff():
-    """Configuració de la dificultat activa."""
-    return DIFFICULTY_SETTINGS[DIFFICULTY['key']]
-
-
-def enemies_to_keep(n):
-    """Quants enemics queden d'un nivell que en tindria n."""
-
-    d = diff()
-
-    if d['mode'] == 'frac':                      # fàcil: la meitat (mínim 1)
-        return min(n, max(1, math.ceil(n * d['keep'])))
-
-    if d['mode'] == 'minus':                     # normal: -2, però mai més del 50 %
-        return n - min(d['remove'], n // 2)
-
-    return n                                     # difícil: tots
-
-
-def record_key(base):
-    """Els rècords són separats per dificultat (el difícil manté les claus de sempre)."""
-
-    if DIFFICULTY['key'] == 'dificil':
-        return str(base)
-
-    return f"{base}_{DIFFICULTY['key']}"
-
-
 ATTACK_COLORS = {
     'Pikachu': (255, 230, 40),
     'Jolteon': (120, 200, 255),
@@ -312,8 +221,6 @@ def resume_level():
 
 def reset_progress():
     PROGRESS['level'] = None
-
-
 BOSS_LEVEL = 11
 
 BOSS_MAX_HP = 11
@@ -1118,10 +1025,7 @@ class GameState:
     def _add_enemy(self, rect, kind, ai, **extra):
         """Afegeix un enemic a totes les llistes i guarda les seves dades d'IA."""
 
-        if kind == GROUND_ENEMY_KIND and diff()['wolf_hp']:
-            hp = diff()['wolf_hp']                       # llop: vida fixa
-        else:
-            hp = max(1, round(ENEMY_HP_BY_KIND[kind] * diff()['hp']))
+        hp = ENEMY_HP_BY_KIND[kind]
 
         direction = random.choice([-1, 1])
 
@@ -1178,21 +1082,9 @@ class GameState:
         if self.is_boss:
             return
 
-        platforms = self.platforms[1:]
-
-        # Quines plataformes es queden amb enemic (a l'atzar)
-        keep = set(random.sample(range(len(platforms)), enemies_to_keep(len(platforms))))
-
-        for i, p in enumerate(platforms):
-
-            if i not in keep:
-                continue
+        for i, p in enumerate(self.platforms[1:]):
 
             ai = ENEMY_AI_CYCLE[i % len(ENEMY_AI_CYCLE)]
-
-            # Fàcil i normal: no hi ha perseguidors, només patrulles
-            if ai == 'chaser' and not diff()['chase']:
-                ai = 'patrol'
 
             kind = AI_KIND[ai]
 
@@ -1226,7 +1118,7 @@ class GameState:
     def _spawn_ground_enemy(self):
         """Llop terrestre: només als nivells GROUND_ENEMY_LEVELS, i només un."""
 
-        if self.level not in GROUND_ENEMY_LEVELS or not ground_frames[0] or not diff()['ground_enemy']:
+        if self.level not in GROUND_ENEMY_LEVELS or not ground_frames[0]:
             return
 
         w, h = ground_info['size']
@@ -1719,17 +1611,6 @@ def load_textures():
     pygame.draw.circle(shot_texture, (255, 255, 255), (14, 14), 5)
 
     logo_raw = pygame.image.load('assets/logo.png').convert_alpha()
-
-    # Reduïm el logo abans de treure-li el fons: el recorregut píxel a píxel
-    # és lent (sobretot al navegador) i amb la imatge gran podia deixar la
-    # pantalla en negre molts segons. (Escala "nearest" perquè no es barregin colors.)
-    if max(logo_raw.get_size()) > 400:
-        k = 400 / max(logo_raw.get_size())
-        logo_raw = pygame.transform.scale(
-            logo_raw,
-            (max(1, int(logo_raw.get_width() * k)), max(1, int(logo_raw.get_height() * k)))
-        )
-
     logo_raw = remove_logo_background(logo_raw)
 
     bbox = logo_raw.get_bounding_rect()
@@ -2070,14 +1951,12 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
 
     reduce = min(slow, 2)               # habilitat Enemics lents (Flareon)
 
-    mult = diff()['speed']              # velocitat segons la dificultat
-
     # ------------------------------------------------------------
     # Volador sinusoïdal: rebota amb els costats de la pantalla i de les plataformes
     # ------------------------------------------------------------
     if ai == 'sine':
 
-        speed = max(mult, cfg['speed'] * mult - reduce)
+        speed = max(1.0, cfg['speed'] - reduce)
 
         nx = d['fx'] + d['dir'] * speed
 
@@ -2105,7 +1984,7 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
 
         left, right = d['bounds']
 
-        speed = cfg['speed'] * mult
+        speed = cfg['speed']
 
         chasing = False
 
@@ -2113,21 +1992,19 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
 
         if ai in ('chaser', 'ground_chaser'):
 
-            can_chase = diff()['wolf_chase'] if ai == 'ground_chaser' else diff()['chase']
-
             near_y = abs(player_hitbox.bottom - enemy.bottom) <= cfg['y_range']
 
-            if can_chase and abs(dx) <= cfg['range'] and near_y:
+            if abs(dx) <= cfg['range'] and near_y:
                 chasing = True
 
         if chasing:
-            speed = cfg['chase'] * mult
+            speed = cfg['chase']
             d['dir'] = 1 if dx > 0 else -1
 
         if chasing and abs(dx) < 6:
             move = 0.0                      # ja és sota el jugador: no tremola
         else:
-            move = max(mult, speed - reduce)
+            move = max(1.0, speed - reduce)
 
         d['fx'] += d['dir'] * move
 
@@ -3540,7 +3417,10 @@ def return_to_menu(gs, used_characters):
 
 def show_start_menu(play_label='JUGAR', has_run=False):
 
-    imprimir_pantalla_fons('assets/menu.png')
+    screen.blit(
+        pygame.transform.scale(pygame.image.load('assets/menu.png'), (WIDTH, HEIGHT)),
+        (0, 0)
+    )
 
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 35))
@@ -3585,13 +3465,6 @@ def show_start_menu(play_label='JUGAR', has_run=False):
              rect.centery - text_surface.get_height() // 2)
         )
 
-    # dificultat actual (D = canviar-la)
-    dcfg = diff()
-
-    dl = _font(24, True).render(f"Dificultat: {dcfg['nom']}  (D)", True, dcfg['color'])
-
-    screen.blit(dl, (WIDTH // 2 - dl.get_width() // 2, 322))
-
     # [NOU5] avís per començar de zero
     if has_run:
         rh = _font(20, True).render('R = començar una partida nova', True, YELLOW)
@@ -3616,87 +3489,6 @@ def show_start_menu(play_label='JUGAR', has_run=False):
     )
 
     screen.blit(footer, (WIDTH // 2 - footer.get_width() // 2, HEIGHT - 25))
-
-    pygame.display.flip()
-
-
-# ===============================================================
-# PANTALLA DE DIFICULTAT
-# ===============================================================
-
-def get_difficulty_cards():
-
-    card_w = 290
-    card_h = 330
-    gap = 30
-
-    n = len(DIFFICULTY_ORDER)
-
-    x0 = (WIDTH - (n * card_w + (n - 1) * gap)) // 2
-
-    return [
-        pygame.Rect(x0 + i * (card_w + gap), 190, card_w, card_h)
-        for i in range(n)
-    ]
-
-
-def show_difficulty(selected_index):
-
-    screen.fill(C4)
-
-    imprimir_pantalla_fons('assets/menu.png')
-
-    panel = pygame.Surface((WIDTH - 120, HEIGHT - 120), pygame.SRCALPHA)
-    panel.fill((0, 0, 0, 170))
-    screen.blit(panel, (60, 60))
-
-    title = _font(54).render('Tria la dificultat', True, WHITE)
-
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 90))
-
-    for i, (key, rect) in enumerate(zip(DIFFICULTY_ORDER, get_difficulty_cards())):
-
-        cfg = DIFFICULTY_SETTINGS[key]
-
-        is_sel = (i == selected_index)
-
-        card = pygame.Surface(rect.size, pygame.SRCALPHA)
-
-        card.fill((255, 255, 255, 60) if is_sel else (255, 255, 255, 22))
-
-        screen.blit(card, rect.topleft)
-
-        pygame.draw.rect(
-            screen,
-            cfg['color'] if is_sel else (140, 140, 140),
-            rect,
-            6 if is_sel else 2,
-            border_radius=12
-        )
-
-        num = _font(24).render(str(i + 1), True, WHITE)
-
-        screen.blit(num, (rect.x + 14, rect.y + 10))
-
-        name = _font(42, True).render(cfg['nom'], True, cfg['color'])
-
-        screen.blit(name, (rect.centerx - name.get_width() // 2, rect.y + 40))
-
-        for j, line in enumerate(cfg['desc']):
-
-            t = _font(24).render(line, True, WHITE)
-
-            screen.blit(
-                t, (rect.centerx - t.get_width() // 2, rect.y + 130 + j * 44)
-            )
-
-    help_text = _font(26).render(
-        'A/D o ratolí = triar    ENTER o clic = començar    ESC = enrere',
-        True,
-        WHITE
-    )
-
-    screen.blit(help_text, (WIDTH // 2 - help_text.get_width() // 2, HEIGHT - 80))
 
     pygame.display.flip()
 
@@ -4211,7 +4003,6 @@ def show_A():
             ('Pokeballs seguides = COMBO (+1 punt a partir de x3)', WHITE),
             ('Pausa = P o ESC', WHITE),
             ('Silenci = N', WHITE),
-            ('Dificultat: en prémer JUGAR (o D al menú)', WHITE),
             ('Hi ha doble salt', WHITE),
             ('Tocar un enemic de costat = mort', WHITE),
             ('Pokeball petita = 1 punt, Ultraball = 2 punts', WHITE),
@@ -4316,14 +4107,17 @@ def cycle_selection(current, step, used_characters):
 def play_music(path, loop=False):
 
     try:
-        pygame.mixer.music.load(music_file(path))
-    except (pygame.error, FileNotFoundError):
-        return
 
-    # en carregar música nova el volum es reinicia: el tornem a aplicar
-    apply_volume()
+        pygame.mixer.music.load(path)
 
-    pygame.mixer.music.play(-1 if loop else 0)
+        # en carregar música nova el volum es reinicia: el tornem a aplicar
+        apply_volume()
+
+        pygame.mixer.music.play(-1 if loop else 0)
+
+    except pygame.error as e:
+
+        print('Música no disponible:', e)
 
 
 JUMP_KEYS = (pygame.K_SPACE, pygame.K_UP, pygame.K_w)
@@ -4368,9 +4162,6 @@ async def main():
     pause_started = 0
     prev_on_ground = True
 
-    # dificultat
-    diff_index = DIFFICULTY_ORDER.index(DIFFICULTY['key'])
-
     # botiga
     shop_char = 0
     shop_ability = 0
@@ -4379,9 +4170,6 @@ async def main():
     shop_msg_until = 0
 
     while running:
-
-        # cedeix el control al navegador (imprescindible per a pygbag)
-        await asyncio.sleep(0)
 
         pokemon_state = "peu"
 
@@ -4407,13 +4195,6 @@ async def main():
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_n:
                     toggle_mute()
 
-                # D = canviar la dificultat des del menú
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_d:
-
-                    k = DIFFICULTY_ORDER.index(DIFFICULTY['key'])
-
-                    DIFFICULTY['key'] = DIFFICULTY_ORDER[(k + 1) % len(DIFFICULTY_ORDER)]
-
                 # [NOU5] R = partida nova (esborra el progrés)
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
 
@@ -4432,10 +4213,10 @@ async def main():
 
                     if buttons[0].collidepoint(event.pos):
 
-                        # primer es tria la dificultat, després el personatge
-                        diff_index = DIFFICULTY_ORDER.index(DIFFICULTY['key'])
+                        selected = 0
+                        death_selected = 0
 
-                        game_state = 'difficulty'
+                        game_state = 'select'
 
                     elif buttons[1].collidepoint(event.pos):
 
@@ -4460,65 +4241,6 @@ async def main():
                     elif buttons[4].collidepoint(event.pos):
 
                         running = False
-
-        # =====================================================
-        # DIFICULTAT
-        # =====================================================
-
-        elif game_state == 'difficulty':
-
-            show_difficulty(diff_index)
-
-            n_diff = len(DIFFICULTY_ORDER)
-
-            for event in pygame.event.get():
-
-                if event.type == pygame.QUIT:
-                    running = False
-
-                confirm = False
-
-                if event.type == pygame.MOUSEMOTION:
-
-                    for k, r in enumerate(get_difficulty_cards()):
-                        if r.collidepoint(event.pos):
-                            diff_index = k
-
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-
-                    for k, r in enumerate(get_difficulty_cards()):
-                        if r.collidepoint(event.pos):
-                            diff_index = k
-                            confirm = True
-
-                if event.type == pygame.KEYDOWN:
-
-                    if event.key in (pygame.K_LEFT, pygame.K_a):
-                        diff_index = (diff_index - 1) % n_diff
-
-                    elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                        diff_index = (diff_index + 1) % n_diff
-
-                    elif event.key == pygame.K_RETURN:
-                        confirm = True
-
-                    elif event.key == pygame.K_ESCAPE:
-                        game_state = 'menu'
-
-                    for num_key, idx in (
-                        (pygame.K_1, 0), (pygame.K_2, 1), (pygame.K_3, 2)
-                    ):
-                        if event.key == num_key and idx < n_diff:
-                            diff_index = idx
-
-                if confirm:
-
-                    DIFFICULTY['key'] = DIFFICULTY_ORDER[diff_index]
-
-                    selected = 0
-                    death_selected = 0
-
-                    game_state = 'select'
 
         # =====================================================
         # BOTIGA
@@ -4646,7 +4368,7 @@ async def main():
 
                             start_fade_in()
 
-                            play_music('assets/musica1.mp3')
+                            play_music(music_file('musica1'))
 
                     if event.key == pygame.K_ESCAPE:
 
@@ -4676,7 +4398,7 @@ async def main():
 
                 game_state = 'menu'
 
-                play_music('assets/musica2.mp3')
+                play_music(music_file('musica2'))
 
                 continue
 
@@ -4730,7 +4452,7 @@ async def main():
 
                         start_fade_in()
 
-                        play_music('assets/musica1.mp3')
+                        play_music(music_file('musica1'))
 
                     if event.key == pygame.K_ESCAPE:
 
@@ -4741,7 +4463,7 @@ async def main():
 
                         game_state = 'menu'
 
-                        play_music('assets/musica2.mp3')
+                        play_music(music_file('musica2'))
 
         # =====================================================
         # CREDITS
@@ -4808,7 +4530,7 @@ async def main():
 
                         start_fade_in()
 
-                        play_music('assets/musica1.mp3')
+                        play_music(music_file('musica1'))
 
                     if event.key == pygame.K_ESCAPE:
 
@@ -4821,7 +4543,7 @@ async def main():
 
                         game_state = 'menu'
 
-                        play_music('assets/musica2.mp3')
+                        play_music(music_file('musica2'))
 
         # =====================================================
         # PAUSA
@@ -4865,7 +4587,7 @@ async def main():
 
                         game_state = 'menu'
 
-                        play_music('assets/musica2.mp3')
+                        play_music(music_file('musica2'))
 
         # =====================================================
         # JUGANT
@@ -5215,12 +4937,12 @@ async def main():
                         final_time = time.time() - gs.start_time
 
                         final_is_record, final_best = submit_record(
-                            record_key('boss'), final_time
+                            'boss', final_time
                         )
 
                         game_state = 'final'
 
-                        play_music('assets/musica2.mp3')
+                        play_music(music_file('musica2'))
 
                 # ------------------------------------------------
                 # NIVELL COMPLETAT
@@ -5239,7 +4961,7 @@ async def main():
                     PROGRESS['level'] = max(PROGRESS['level'] or 0, gs.level)
 
                     # rècord de temps del nivell
-                    is_record, best_time = submit_record(record_key(gs.level), time_taken)
+                    is_record, best_time = submit_record(gs.level, time_taken)
 
                     show_victory_screen(
                         time_taken,
@@ -5257,8 +4979,6 @@ async def main():
                     while waiting:
 
                         await asyncio.sleep(0)
-
-                        clock.tick(30)
 
                         for event in pygame.event.get():
 
@@ -5302,7 +5022,7 @@ async def main():
 
                                     return_to_menu(gs, used_characters)
 
-                                    play_music('assets/musica2.mp3')
+                                    play_music(music_file('musica2'))
 
                                     waiting = False
 
@@ -5563,14 +5283,6 @@ async def main():
 
             screen.blit(level_text, (20, 20))
 
-            # dificultat activa
-            hud_diff = diff()
-
-            screen.blit(
-                _font(20, True).render(hud_diff['nom'], True, hud_diff['color']),
-                (level_text.get_width() + 34, 28)
-            )
-
             # cares dels personatges sota el nivell:
             # color = es pot utilitzar, gris amb X = ja ha mort
             draw_character_faces(selected, used_characters, 20, 62)
@@ -5722,7 +5434,7 @@ async def main():
 
                 if not gs.death_music_played:
 
-                    play_music('assets/musica_mort.mp3')
+                    play_music(music_file('musica_mort'))
 
                     gs.death_music_played = True
 
@@ -5752,7 +5464,7 @@ async def main():
 
                         game_state = 'menu'
 
-                        play_music('assets/musica2.mp3')
+                        play_music(music_file('musica2'))
 
                 if keys[pygame.K_ESCAPE]:
 
@@ -5763,7 +5475,7 @@ async def main():
 
                     game_state = 'menu'
 
-                    play_music('assets/musica2.mp3')
+                    play_music(music_file('musica2'))
 
             apply_boss_shake(gs)
 
@@ -5774,10 +5486,11 @@ async def main():
 
         clock.tick(60)
 
+        # cedeix el control al navegador (obligatori a la versió web)
+        await asyncio.sleep(0)
+
     delete_save_on_exit()
     pygame.quit()
 
 
-if __name__ == "__main__":
-
-    asyncio.run(main())
+asyncio.run(main())
