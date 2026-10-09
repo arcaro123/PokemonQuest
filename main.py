@@ -44,9 +44,23 @@ _cache_fons = {}
 
 
 def imprimir_pantalla_fons(image):
+
     if image not in _cache_fons:
-        original = pygame.image.load(image).convert()
-        _cache_fons[image] = pygame.transform.scale(original, (AMPLADA, ALTURA))
+
+        try:
+            original = pygame.image.load(image).convert()
+            _cache_fons[image] = pygame.transform.scale(original, (AMPLADA, ALTURA))
+
+        except (FileNotFoundError, pygame.error):
+
+            # Si falta un fons, no es trenca el joc: es pinta un color llis
+            print('AVÍS: falta la imatge', image)
+
+            fallback = pygame.Surface((AMPLADA, ALTURA))
+            fallback.fill((30, 60, 110))
+
+            _cache_fons[image] = fallback
+
     pantalla.blit(_cache_fons[image], (0, 0))
 
 
@@ -1045,6 +1059,10 @@ class GameState:
         self.extra_lives = ability_level(ACTIVE['nom'], 'vida_extra')
         self.player_invuln_until = 0
 
+        # [NOU8] Canvi de personatge dins del nivell: cadascú guarda les seves vides
+        self.lives_by_char = {ACTIVE['nom']: self.extra_lives}
+        self.switch_ready_at = 0
+
         # Valors que main() actualitza cada frame segons les habilitats
         self.boss_damage = 1
         self.stomp_bounce = 0
@@ -1153,6 +1171,16 @@ class GameState:
             self.boss_platform_origins = [p.copy() for p in self.platforms[1:]]
 
         init_boss_extras(self)
+
+    def swap_lives(self, old_nom, new_nom):
+        """En canviar de personatge, cadascú guarda les seves vides extra del nivell."""
+
+        self.lives_by_char[old_nom] = self.extra_lives
+
+        if new_nom not in self.lives_by_char:
+            self.lives_by_char[new_nom] = ability_level(new_nom, 'vida_extra')
+
+        self.extra_lives = self.lives_by_char[new_nom]
 
     def _add_enemy(self, rect, kind, ai, **extra):
         """Afegeix un enemic a totes les llistes i guarda les seves dades d'IA."""
@@ -1529,45 +1557,69 @@ logo_texture = None
 
 
 def remove_logo_background(surf):
+    """Treu el fons (blau clar / blanc) connectat a les vores. Versió ràpida amb bytes."""
 
     w, h = surf.get_size()
 
+    to_bytes = getattr(pygame.image, 'tobytes', None) or pygame.image.tostring
+    from_bytes = getattr(pygame.image, 'frombytes', None) or pygame.image.fromstring
+
+    data = bytearray(to_bytes(surf, 'RGBA'))
+
+    seen = bytearray(w * h)
+
     stack = []
-    visited = set()
 
     for x in range(w):
-        stack.append((x, 0))
-        stack.append((x, h - 1))
+        stack.append(x)
+        stack.append((h - 1) * w + x)
 
     for y in range(h):
-        stack.append((0, y))
-        stack.append((w - 1, y))
+        stack.append(y * w)
+        stack.append(y * w + w - 1)
 
-    def es_fons(color):
-        r, g, b, a = color
-        if a == 0:
-            return True
-        blau_clar = (b >= r + 12 and g >= r - 5 and b > 145)
-        blanc_fons = (r > 238 and g > 238 and b > 238)
-        return blau_clar or blanc_fons
+    last_row = w * (h - 1)
 
     while stack:
 
-        x, y = stack.pop()
+        i = stack.pop()
 
-        if x < 0 or y < 0 or x >= w or y >= h or (x, y) in visited:
+        if seen[i]:
             continue
 
-        visited.add((x, y))
+        seen[i] = 1
 
-        if not es_fons(surf.get_at((x, y))):
-            continue
+        o = i * 4
 
-        surf.set_at((x, y), (255, 255, 255, 0))
+        if data[o + 3]:
 
-        stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+            r = data[o]
+            g = data[o + 1]
+            b = data[o + 2]
 
-    return surf
+            blau_clar = (b >= r + 12 and g >= r - 5 and b > 145)
+            blanc_fons = (r > 238 and g > 238 and b > 238)
+
+            if not (blau_clar or blanc_fons):
+                continue
+
+        data[o] = 255
+        data[o + 1] = 255
+        data[o + 2] = 255
+        data[o + 3] = 0
+
+        x = i % w
+
+        if x > 0:
+            stack.append(i - 1)
+        if x < w - 1:
+            stack.append(i + 1)
+        if i >= w:
+            stack.append(i - w)
+        if i < last_row:
+            stack.append(i + w)
+
+    return from_bytes(bytes(data), (w, h), 'RGBA').convert_alpha()
 
 
 def load_boss_frames():
@@ -1684,6 +1736,10 @@ def load_ground_enemy():
 
 
 def load_textures():
+    """
+    Generador: carrega les textures per passos i, abans de cada pas, retorna
+    un missatge. Així es pot mostrar una pantalla de càrrega (vegeu load_all).
+    """
 
     global platform_texture
     global float_platform_texture
@@ -1695,6 +1751,8 @@ def load_textures():
     global shot_texture
     global logo_texture
 
+    yield 'Carregant personatges'
+
     CHARACTERS.append(make_pikachu())
 
     if os.path.exists('assets/jolteon.png'):
@@ -1702,6 +1760,8 @@ def load_textures():
 
     if os.path.exists('assets/flareon.png'):
         CHARACTERS.append(make_eevee_evolution('Flareon', 'assets/flareon.png'))
+
+    yield 'Carregant plataformes i enemics'
 
     platform_texture = pygame.image.load('assets/plataforma1.png')
     float_platform_texture = pygame.image.load('assets/plataforma1.png')
@@ -1714,7 +1774,11 @@ def load_textures():
     enemy_chaser_texture.fill((255, 150, 150), special_flags=pygame.BLEND_RGB_MULT)
     enemy_texture2 = pygame.image.load('assets/volador2.png')
 
+    yield 'Preparant el llop'
+
     load_ground_enemy()
+
+    yield 'Carregant pokeballs'
 
     # Les dues boles es retallen i s'escalen a POKEBALL_SIZE, que és
     # també la mida de la hitbox: així la imatge i la hitbox coincideixen.
@@ -1749,6 +1813,8 @@ def load_textures():
         # Si falta el fitxer, fem servir l'ultraball
         pokeball_small_texture = pokeball_texture
 
+    yield 'Carregant el boss'
+
     load_boss_frames()
 
     shot_texture = pygame.Surface((28, 28), pygame.SRCALPHA)
@@ -1757,29 +1823,51 @@ def load_textures():
     pygame.draw.circle(shot_texture, (170, 80, 230), (14, 14), 10)
     pygame.draw.circle(shot_texture, (255, 255, 255), (14, 14), 5)
 
-    logo_raw = pygame.image.load('assets/logo.png').convert_alpha()
+    yield 'Preparant el logo'
 
-    # Reduïm el logo abans de treure-li el fons: el recorregut píxel a píxel
-    # és lent (sobretot al navegador) i amb la imatge gran podia deixar la
-    # pantalla en negre molts segons. (Escala "nearest" perquè no es barregin colors.)
-    if max(logo_raw.get_size()) > 400:
-        k = 400 / max(logo_raw.get_size())
-        logo_raw = pygame.transform.scale(
-            logo_raw,
-            (max(1, int(logo_raw.get_width() * k)), max(1, int(logo_raw.get_height() * k)))
-        )
+    # El logo és OPCIONAL: si no hi és, el menú mostra el títol en text.
+    #   assets/logo_transparent.png -> es fa servir tal qual (el més ràpid)
+    #   assets/logo.png             -> es redueix i se li treu el fons
+    logo_texture = None
+    logo_raw = None
 
-    logo_raw = remove_logo_background(logo_raw)
+    if os.path.exists('assets/logo_transparent.png'):
 
-    bbox = logo_raw.get_bounding_rect()
+        logo_raw = pygame.image.load('assets/logo_transparent.png').convert_alpha()
 
-    if bbox.width > 0 and bbox.height > 0:
-        logo_raw = logo_raw.subsurface(bbox).copy()
+    elif os.path.exists('assets/logo.png'):
 
-    logo_texture = pygame.transform.smoothscale(logo_raw, (280, 280))
+        logo_raw = pygame.image.load('assets/logo.png').convert_alpha()
+
+        # Reduïm el logo abans de treure-li el fons: el recorregut píxel a píxel
+        # és lent (sobretot al navegador) i amb la imatge gran podia deixar la
+        # pantalla en negre molts segons. (Escala "nearest" perquè no es barregin colors.)
+        if max(logo_raw.get_size()) > 400:
+            k = 400 / max(logo_raw.get_size())
+            logo_raw = pygame.transform.scale(
+                logo_raw,
+                (max(1, int(logo_raw.get_width() * k)), max(1, int(logo_raw.get_height() * k)))
+            )
+
+        logo_raw = remove_logo_background(logo_raw)
+
+    else:
+
+        print('AVÍS: no hi ha assets/logo.png; es mostrarà el títol en text')
+
+    if logo_raw is not None:
+
+        bbox = logo_raw.get_bounding_rect()
+
+        if bbox.width > 0 and bbox.height > 0:
+            logo_raw = logo_raw.subsurface(bbox).copy()
+
+        logo_texture = pygame.transform.smoothscale(logo_raw, (280, 280))
+
+    yield 'Llest!'
 
 
-load_textures()
+# Les textures es carreguen a load_all() (amb pantalla de càrrega).
 load_sfx()
 load_save()
 load_records()
@@ -2568,7 +2656,7 @@ _BOSS_TIMERS = (
     'boss_platform_event_until', 'boss_platform_roar_until',
     'boss_flash_until',
     'player_invuln_until', 'attack_ready_at', 'special_ready_at',
-    'last_pickup_at'
+    'last_pickup_at', 'switch_ready_at'
 )
 
 
@@ -3591,6 +3679,15 @@ def show_start_menu(play_label='JUGAR', has_run=False):
         logo_rect.top = 25
         screen.blit(logo_texture, logo_rect)
 
+    else:
+
+        # Sense logo: títol en text
+        t1 = _font(64, True).render('POKÉMON PLATFORMER', True, YELLOW)
+        t2 = _font(40, True).render('Poké Ball Quest', True, WHITE)
+
+        screen.blit(t1, (WIDTH // 2 - t1.get_width() // 2, 90))
+        screen.blit(t2, (WIDTH // 2 - t2.get_width() // 2, 170))
+
     font = _font(34, True)
 
     mouse_pos = pygame.mouse.get_pos()
@@ -4174,7 +4271,6 @@ def show_pause(snapshot):
 
     for i, line in enumerate((
         'P o ESC = continuar',
-        'M = tornar al menú',
         'N = silenci' + (' (activat)' if MUTED['on'] else '')
     )):
         t = _font(32).render(line, True, YELLOW)
@@ -4250,6 +4346,8 @@ def show_A():
             ('Pokeballs seguides = COMBO (+1 punt a partir de x3)', WHITE),
             ('Pausa = P o ESC', WHITE),
             ('Silenci = N', WHITE),
+            ('Canviar de personatge = 1, 2, 3 o TAB', WHITE),
+            ('Entre nivells: B = botiga de millores', WHITE),
             ('Dificultat: en prémer JUGAR (o D al menú)', WHITE),
             ('Hi ha doble salt', WHITE),
             ('Tocar un enemic de costat = mort', WHITE),
@@ -4257,8 +4355,8 @@ def show_A():
             ('Gasta els punts a la BOTIGA del menú', WHITE),
         ],
         font,
-        25,
-        38
+        20,
+        34
     )
 
     pygame.display.flip()
@@ -4294,7 +4392,7 @@ def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
             record_line,
             (next_text, WHITE),
             ('2 - Tornar al Nivell', WHITE),
-            ('ESC - Sortir', WHITE),
+            ('B - Botiga: millorar habilitats', GOLD),
         ],
         font,
         HEIGHT // 6,
@@ -4369,10 +4467,104 @@ JUMP_KEYS = (pygame.K_SPACE, pygame.K_UP, pygame.K_w)
 
 
 # ===============================================================
-# MAIN
+# PANTALLA DE CÀRREGA I ERRORS (important al navegador: sense això,
+# mentre es carreguen les imatges només es veuria la pantalla negra)
 # ===============================================================
 
+LOAD_STEPS = 7        # nombre de passos que retorna load_textures()
+
+
+def draw_loading(msg, step):
+
+    screen.fill((10, 20, 45))
+
+    big = pygame.font.Font(None, 56)
+    small = pygame.font.Font(None, 34)
+
+    title = big.render('Pokémon Platformer', True, WHITE)
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 110))
+
+    text = small.render(msg + '...', True, YELLOW)
+    screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 30))
+
+    bar_w = 400
+    x = WIDTH // 2 - bar_w // 2
+    y = HEIGHT // 2 + 30
+
+    pygame.draw.rect(screen, (60, 70, 100), (x, y, bar_w, 20))
+    pygame.draw.rect(screen, GOLD, (x, y, int(bar_w * min(1.0, step / LOAD_STEPS)), 20))
+    pygame.draw.rect(screen, WHITE, (x, y, bar_w, 20), 2)
+
+    pygame.display.flip()
+
+
+async def load_all():
+    """Carrega les textures per passos, cedint el control al navegador entre cadascun."""
+
+    draw_loading('Iniciant', 0)
+
+    await asyncio.sleep(0.05)
+
+    step = 0
+
+    for msg in load_textures():
+
+        draw_loading(msg, step)
+
+        step += 1
+
+        await asyncio.sleep(0.05)
+
+
+def show_fatal(err):
+    """Mostra l'error de Python a la pantalla (si no, només es veuria a la consola)."""
+
+    import textwrap
+
+    screen.fill((45, 0, 0))
+
+    font = pygame.font.Font(None, 24)
+
+    lines = ['ERROR - fes una captura d\'aquesta pantalla:', '']
+
+    for raw in err.splitlines():
+        lines.extend(textwrap.wrap(raw, 110) or [''])
+
+    y = 8
+
+    for line in lines[:2] + lines[2:][-28:]:
+        screen.blit(font.render(line, True, WHITE), (10, y))
+        y += 24
+
+    pygame.display.flip()
+
+
 async def main():
+
+    try:
+
+        await load_all()
+
+        await game()
+
+    except Exception:
+
+        import traceback
+
+        err = traceback.format_exc()
+
+        print(err)
+
+        while True:
+            show_fatal(err)
+            await asyncio.sleep(0.2)
+
+
+# ===============================================================
+# JOC
+# ===============================================================
+
+async def game():
 
     clock = pygame.time.Clock()
 
@@ -4893,19 +5085,6 @@ async def main():
 
                         game_state = 'playing'
 
-                    elif event.key == pygame.K_m:
-
-                        selected = 0
-                        death_selected = 0
-
-                        return_to_menu(gs, used_characters)
-
-                        music_unpause()
-
-                        game_state = 'menu'
-
-                        play_music('assets/musica2.mp3')
-
         # =====================================================
         # JUGANT
         # =====================================================
@@ -4917,8 +5096,9 @@ async def main():
             # ---- Valors segons les habilitats del personatge actiu ----
             nom = player_char.nom
 
-            def lv(ab_id, _nom=nom):
-                return ability_level(_nom, ab_id)
+            def lv(ab_id):
+                # sempre mira el personatge actual (també si canvies a mig frame)
+                return ability_level(player_char.nom, ab_id)
 
             speed = PLAYER_SPEED + lv('velocitat')
             max_jumps = 3 if lv('triple_salt') else 2
@@ -4987,6 +5167,48 @@ async def main():
                             gs.special_cd_total = cd
 
                             play_sfx('atac')
+
+                    # Canviar de personatge (1-2-3 o TAB)
+                    if (
+                        event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_TAB)
+                        and gs.alive
+                        and current_time >= gs.switch_ready_at
+                    ):
+                        if event.key == pygame.K_TAB:
+                            target = cycle_selection(selected, 1, used_characters)
+                        else:
+                            target = event.key - pygame.K_1
+
+                        if (
+                            target != selected
+                            and 0 <= target < len(CHARACTERS)
+                            and target not in used_characters
+                        ):
+                            old_nom = player_char.nom
+
+                            selected = target
+                            player_char = CHARACTERS[selected]
+                            nom = player_char.nom
+
+                            ACTIVE['nom'] = nom
+                            gs.swap_lives(old_nom, nom)
+
+                            gs.switch_ready_at = current_time + 800
+
+                            sprite_index = 0
+                            last_change_frame_time = current_time
+
+                            # efecte de canvi
+                            sw_col = ATTACK_COLORS.get(nom, WHITE)
+                            sw_x = gs.player_x + PLAYER_SIZE[0] // 2
+                            sw_y = gs.player_y + PLAYER_SIZE[1] // 2
+
+                            spawn_particles(
+                                sw_x, sw_y, sw_col, 18,
+                                speed=4, life=450, size=5, gravity=0.05
+                            )
+                            spawn_ring(sw_x, sw_y, sw_col, 50, 300)
+                            add_popup(sw_x, gs.player_y - 20, nom, sw_col, 24)
 
                 # Salt variable: si deixes anar la tecla, saltes menys
                 if event.type == pygame.KEYUP and event.key in JUMP_KEYS:
@@ -5280,18 +5502,26 @@ async def main():
                     # rècord de temps del nivell
                     is_record, best_time = submit_record(record_key(gs.level), time_taken)
 
-                    show_victory_screen(
-                        time_taken,
-                        gs.collected_pokeballs,
-                        gs.total_pokeballs,
-                        gs.level,
-                        points_gained,
-                        SAVE['points'],
-                        best_time,
-                        is_record
-                    )
+                    def draw_victory():
+                        show_victory_screen(
+                            time_taken,
+                            gs.collected_pokeballs,
+                            gs.total_pokeballs,
+                            gs.level,
+                            points_gained,
+                            SAVE['points'],
+                            best_time,
+                            is_record
+                        )
+
+                    draw_victory()
 
                     waiting = True
+
+                    in_shop = False
+                    shop_char = selected
+                    shop_ability = 0
+                    shop_msg = ''
 
                     while waiting:
 
@@ -5299,51 +5529,100 @@ async def main():
 
                         clock.tick(30)
 
+                        if in_shop:
+
+                            if shop_msg and pygame.time.get_ticks() > shop_msg_until:
+                                shop_msg = ''
+
+                            show_shop(shop_char, shop_ability, shop_msg, shop_msg_ok)
+
                         for event in pygame.event.get():
 
                             if event.type == pygame.QUIT:
                                 delete_save_on_exit()
                                 return
 
-                            if event.type == pygame.KEYDOWN:
+                            if event.type != pygame.KEYDOWN:
+                                continue
 
-                                if event.key == pygame.K_1:
+                            # ---------- Botiga entre nivells ----------
+                            if in_shop:
 
-                                    gs.reset(gs.level + 1)
+                                n_abilities = len(get_abilities(CHARACTERS[shop_char].nom))
 
-                                    gs.start_time = time.time()
+                                if event.key in (pygame.K_LEFT, pygame.K_a):
 
-                                    waiting = False
+                                    shop_char = (shop_char - 1) % len(CHARACTERS)
+                                    shop_ability = 0
+                                    shop_msg = ''
 
-                                    prev_on_ground = True
+                                elif event.key in (pygame.K_RIGHT, pygame.K_d):
 
-                                    start_fade_in()
+                                    shop_char = (shop_char + 1) % len(CHARACTERS)
+                                    shop_ability = 0
+                                    shop_msg = ''
 
-                                    music_replay()
+                                elif event.key in (pygame.K_UP, pygame.K_w):
 
-                                if event.key == pygame.K_2:
+                                    shop_ability = (shop_ability - 1) % n_abilities
 
-                                    gs.reset(gs.level)
+                                elif event.key in (pygame.K_DOWN, pygame.K_s):
 
-                                    gs.start_time = time.time()
+                                    shop_ability = (shop_ability + 1) % n_abilities
 
-                                    waiting = False
+                                elif event.key == pygame.K_RETURN:
 
-                                    prev_on_ground = True
+                                    ch = CHARACTERS[shop_char]
 
-                                    start_fade_in()
+                                    ab = get_abilities(ch.nom)[shop_ability]
 
-                                    music_replay()
+                                    shop_msg_ok, shop_msg = buy_ability(ch.nom, ab)
 
-                                if event.key == pygame.K_ESCAPE:
+                                    shop_msg_until = pygame.time.get_ticks() + 2500
 
-                                    game_state = 'menu'
+                                elif event.key == pygame.K_ESCAPE:
 
-                                    return_to_menu(gs, used_characters)
+                                    in_shop = False
 
-                                    play_music('assets/musica2.mp3')
+                                    draw_victory()
 
-                                    waiting = False
+                                continue
+
+                            # ---------- Pantalla de nivell completat ----------
+                            if event.key == pygame.K_b:
+
+                                in_shop = True
+                                shop_char = selected
+                                shop_ability = 0
+                                shop_msg = ''
+
+                            if event.key == pygame.K_1:
+
+                                gs.reset(gs.level + 1)
+
+                                gs.start_time = time.time()
+
+                                waiting = False
+
+                                prev_on_ground = True
+
+                                start_fade_in()
+
+                                music_replay()
+
+                            if event.key == pygame.K_2:
+
+                                gs.reset(gs.level)
+
+                                gs.start_time = time.time()
+
+                                waiting = False
+
+                                prev_on_ground = True
+
+                                start_fade_in()
+
+                                music_replay()
 
             # Vida extra: si ha mort i li queden vides, reviu
             try_revive(gs, pygame.time.get_ticks())
@@ -5679,6 +5958,15 @@ async def main():
 
                 screen.blit(combo_text, (20, 176))
 
+            # Pista per canviar de personatge
+            if len(CHARACTERS) - len(used_characters) > 1:
+
+                sw_hint = _font(16, True).render(
+                    '1-2-3 / TAB = canviar de personatge', True, (200, 200, 200)
+                )
+
+                screen.blit(sw_hint, (20, HEIGHT - 54))
+
             # Silenci
             if MUTED['on']:
 
@@ -5817,6 +6105,6 @@ async def main():
     pygame.quit()
 
 
-if __name__ == "__main__":
-
-    asyncio.run(main())
+# pygbag (navegador) necessita aquesta crida al final, sense "if __name__ ...";
+# a l'ordinador també funciona.
+asyncio.run(main())
