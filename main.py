@@ -147,7 +147,7 @@ COMBO_MIN = 3
 ATTACK_KEYS = (pygame.K_x, pygame.K_j)
 SPECIAL_KEYS = (pygame.K_c, pygame.K_k)
 
-ATTACK_COOLDOWN_MS = 450
+ATTACK_COOLDOWN_MS = 800  # Aumentat de 450ms a 800ms
 ATTACK_SPEED = 11
 ATTACK_LIFE_FRAMES = 45          # ~0,75 s de vol
 
@@ -155,10 +155,6 @@ ENEMY_HP_BY_KIND = {0: 2, 1: 3, 2: 4, 3: 2}  # 0 = abella, 1 = volador gran, 2 =
 
 # ---------------------------------------------------------------
 # [NOU4] ENEMIC TERRESTRE (llop, assets/terra.png)
-# Només als nivells GROUND_ENEMY_LEVELS, n'hi ha UN, i només camina
-# per terra, sense sortir dels límits de la plataforma on neix.
-# Fotogrames de caminar: assets/terra_corre1.png ... terra_corre4.png
-# (es generen amb genera_frames_terra.py). Si no hi són, simula el caminar.
 # ---------------------------------------------------------------
 
 GROUND_ENEMY_LEVELS = {4, 5, 6}
@@ -170,13 +166,6 @@ GROUND_ENEMY_FRAME_MS = 120       # temps de cada fotograma de caminar
 
 # ---------------------------------------------------------------
 # [NOU6] COMPORTAMENTS DELS ENEMICS
-#   patrol        -> camina d'una vora a l'altra de la SEVA plataforma
-#   chaser        -> patrulla la seva plataforma i, si el jugador és a prop,
-#                    el persegueix (sense sortir de la plataforma)
-#   ground_chaser -> igual que chaser, però pel terra (el llop)
-#   sine          -> vola amb moviment sinusoïdal; rebota amb les plataformes
-# Els enemics s'assignen a les plataformes en aquest ordre (ENEMY_AI_CYCLE).
-# Saltar a sobre d'un enemic el mata (ENEMY_STOMP_DAMAGE).
 # ---------------------------------------------------------------
 
 ENEMY_AI = {
@@ -190,11 +179,10 @@ ENEMY_AI_CYCLE = ['patrol', 'sine', 'chaser']
 
 AI_KIND = {'patrol': 1, 'sine': 0, 'chaser': 3}   # quin sprite i vida fa servir cada tipus
 
-# Mal en trepitjar un enemic (per tipus). Vida: abella 2, volador gran 3, llop 4, abella vermella 2
+# Mal en trepitjar un enemic (per tipus).
 ENEMY_STOMP_DAMAGE = {0: 1, 1: 1, 2: 1, 3: 1}
 
-# Mal de cada atac especial segons el nivell comprat (nivell 1, 2, 3).
-# Abans: cua 2/3/4, plasma 1/2/3, foc 2/3/3. Canvia aquests números per ajustar-ho.
+# Mal de cada atac especial segons el nivell comprat
 SPECIAL_DAMAGE = {
     'cua':    [1, 2, 3],
     'plasma': [1, 1, 2],
@@ -209,19 +197,6 @@ def special_damage(sid, lvl):
 
 # ---------------------------------------------------------------
 # [NOU7] DIFICULTAT
-#
-#   mode 'frac'  -> es queda aquesta fracció dels enemics (mínim 1)
-#   mode 'minus' -> treu 'remove' enemics, però mai més del 50 %
-#   mode 'all'   -> tots els enemics (com el joc original)
-#
-#   speed       -> multiplicador de velocitat dels enemics
-#   hp          -> multiplicador de vida dels enemics
-#   wolf_hp     -> vida fixa del llop (None = la normal)
-#   chase       -> les abelles vermelles et persegueixen?
-#   wolf_chase  -> el llop et persegueix?
-#
-# La dificultat es tria en prémer JUGAR (pantalla de dificultat) o amb
-# la tecla D al menú, i es manté mentre el joc està obert.
 # ---------------------------------------------------------------
 
 DIFFICULTY_SETTINGS = {
@@ -232,6 +207,7 @@ DIFFICULTY_SETTINGS = {
         'mode': 'frac', 'keep': 0.5,
         'speed': 0.6, 'hp': 0.5, 'wolf_hp': 1,
         'chase': False, 'wolf_chase': False, 'ground_enemy': True,
+        'boss_hp_mult': 1.0,
     },
     'normal': {
         'nom': 'NORMAL', 'color': (255, 220, 60),
@@ -240,6 +216,7 @@ DIFFICULTY_SETTINGS = {
         'mode': 'minus', 'remove': 2,
         'speed': 0.8, 'hp': 1.0, 'wolf_hp': None,
         'chase': False, 'wolf_chase': False, 'ground_enemy': True,
+        'boss_hp_mult': 2.0,  # Boss Vida x2
     },
     'dificil': {
         'nom': 'DIFÍCIL', 'color': (255, 80, 80),
@@ -248,6 +225,7 @@ DIFFICULTY_SETTINGS = {
         'mode': 'all',
         'speed': 1.0, 'hp': 1.0, 'wolf_hp': None,
         'chase': True, 'wolf_chase': True, 'ground_enemy': True,
+        'boss_hp_mult': 3.5,  # Boss Vida x3.5
     },
 }
 
@@ -276,7 +254,7 @@ def enemies_to_keep(n):
 
 
 def record_key(base):
-    """Els rècords són separats per dificultat (el difícil manté les claus de sempre)."""
+    """Els rècords són separats per dificultat."""
 
     if DIFFICULTY['key'] == 'dificil':
         return str(base)
@@ -290,7 +268,6 @@ ATTACK_COLORS = {
     'Flareon': (255, 120, 30),
 }
 
-# Quina habilitat és l'atac especial de cada personatge
 SPECIAL_BY_CHAR = {
     'Pikachu': 'cua',
     'Jolteon': 'plasma',
@@ -298,32 +275,13 @@ SPECIAL_BY_CHAR = {
 }
 
 MIN_POKEBALL_DISTANCE = 60
-
-# Mida (en píxels) de les pokeballs: la textura i la hitbox són iguals
 POKEBALL_SIZE = 40
-
-# Els atacs (X/J i C/K) es desbloquegen en comprar el nivell 1
-# de l'habilitat especial del personatge. Posa-ho a False per
-# tornar a tenir l'atac bàsic des del principi.
 BASIC_ATTACK_REQUIRES_SPECIAL = True
-
-# Personatges els sprites dels quals miren cap a l'ESQUERRA al PNG original.
-# Es giren en carregar-los perquè mirin cap on es mouen.
-# (Buit = no es gira cap personatge. Si Jolteon es veu al revés, posa {'Jolteon'}.)
 SPRITE_FACES_LEFT = set()
-
 START_LEVEL = 1
 
-# ---------------------------------------------------------------
-# [NOU5] PROGRÉS DE LA PARTIDA (només mentre el joc està obert)
-# Si tornes al menú sense haver mort amb tots els personatges, en
-# prémer CONTINUAR tornes al nivell on eres i es mantenen els
-# personatges que ja han mort. Amb R al menú comences de zero.
-# ---------------------------------------------------------------
-
-RESUME_AT_NEXT_LEVEL = False   # False = últim nivell COMPLETAT; True = el següent
-
-PROGRESS = {'level': None}     # últim nivell completat (None = cap)
+RESUME_AT_NEXT_LEVEL = False
+PROGRESS = {'level': None}
 
 
 def resume_level():
@@ -345,15 +303,10 @@ def reset_progress():
 
 BOSS_LEVEL = 11
 
-BOSS_MAX_HP = 11
-
-# FASE 2 quan arriba al 50%
-BOSS_PHASE2_HP = BOSS_MAX_HP / 2
+BOSS_BASE_HP = 11
 
 # ---------------------------------------------------------------
 # POKEBALLS I PUNTS
-# Nivells 1..SIMPLE_POKEBALL_MAX_LEVEL -> pokeball petita (1 punt)
-# Resta de nivells                     -> ultraball (2 punts)
 # ---------------------------------------------------------------
 
 SIMPLE_POKEBALL_MAX_LEVEL = 5
@@ -367,19 +320,12 @@ def pokeball_points_for_level(level):
     return POINTS_ULTRABALL
 
 
-# ---------------------------------------------------------------
-# CARES DELS PERSONATGES (HUD)
-# Si no hi ha 'assets/cara_<nom>.png' (ex: cara_pikachu.png),
-# es retalla automàticament la part de dalt de l'sprite.
-# ---------------------------------------------------------------
-
-FACE_CROP_HEIGHT = 0.5   # fracció de l'alçada de l'sprite que es considera "cara"
+FACE_CROP_HEIGHT = 0.5
 
 # ---------------------------------------------------------------
-# PLATAFORMES DEL BOSS
+# PLATAFORMES DEL BOSS (Paràmetres adaptats dinàmicament)
 # ---------------------------------------------------------------
 
-BOSS_PLATFORM_DAMAGE_HP = BOSS_MAX_HP * 0.75
 BOSS_PLATFORM_DAMAGE_SCALE = 0.55
 
 BOSS_PLATFORM_PRE_ROAR_MIN = 2000
@@ -415,12 +361,10 @@ LEVEL_BACKGROUNDS = {
 
 
 # ---------------------------------------------------------------
-# PARTIDA GUARDADA (punts + habilitats comprades)
-# Es guarda a savegame.json, al costat del joc.
+# PARTIDA GUARDADA
 # ---------------------------------------------------------------
 
 SAVE_FILE = 'savegame.json'
-
 SAVE = {'points': 0, 'upgrades': {}}
 
 
@@ -444,7 +388,6 @@ def save_game():
 
 
 def delete_save_on_exit():
-    """Esborra tota la partida guardada en tancar el joc."""
     try:
         if os.path.exists(SAVE_FILE):
             os.remove(SAVE_FILE)
@@ -459,11 +402,9 @@ def add_points(n):
 
 # ---------------------------------------------------------------
 # RÈCORDS DE TEMPS PER NIVELL
-# Fitxer a part (records.json): NO s'esborra en tancar el joc.
 # ---------------------------------------------------------------
 
 RECORDS_FILE = 'records.json'
-
 RECORDS = {}
 
 
@@ -486,10 +427,8 @@ def save_records():
 
 
 def submit_record(key, t):
-    """Retorna (és_nou_rècord, millor_temps)."""
 
     key = str(key)
-
     best = RECORDS.get(key)
 
     if best is None or t < best:
@@ -501,15 +440,7 @@ def submit_record(key, t):
 
 
 # ---------------------------------------------------------------
-# HABILITATS (5 per personatge)
-#
-#   'id'    -> identificador (no el canviïs un cop publicat)
-#   'nom'   -> nom que es veu a la botiga
-#   'desc'  -> descripció (màx ~48 caràcters perquè càpiga)
-#   'costs' -> preu de cada nivell (el nombre d'elements = nivell màxim)
-#
-# Per saber el nivell d'una habilitat dins el joc:
-#   ability_level('Pikachu', 'triple_salt')   # 0 = no comprada
+# HABILITATS (Preus multiplicats x2.5)
 # ---------------------------------------------------------------
 
 DEFAULT_ABILITIES = [
@@ -556,7 +487,13 @@ ABILITIES = {
     ],
 }
 
-# Personatge que s'està fent servir (per a get_player_hitbox, etc.)
+# Multipliquem els preus de totes les habilitats per 2.5
+for _char_abilities in ABILITIES.values():
+    for _ab in _char_abilities:
+        _ab['costs'] = [round(c * 2.5) for c in _ab['costs']]
+for _ab in DEFAULT_ABILITIES:
+    _ab['costs'] = [round(c * 2.5) for c in _ab['costs']]
+
 ACTIVE = {'nom': 'Pikachu'}
 
 
@@ -569,7 +506,6 @@ def ability_level(nom, ab_id):
 
 
 def buy_ability(nom, ab):
-    """Intenta comprar el següent nivell d'una habilitat. Retorna (ok, missatge)."""
 
     level = ability_level(nom, ab['id'])
 
@@ -590,13 +526,10 @@ def buy_ability(nom, ab):
 
 
 # ---------------------------------------------------------------
-# EFECTES DE SO (opcionals: si el fitxer no existeix, no sona)
-# Fitxers esperats a assets/: salt, pokeball, hit, atac  (.wav o .ogg)
+# EFECTES DE SO
 # ---------------------------------------------------------------
 
 sfx = {}
-
-# Silenci (tecla N)
 MUTED = {'on': False}
 
 
@@ -604,7 +537,7 @@ def apply_volume():
     try:
         pygame.mixer.music.set_volume(0.0 if MUTED['on'] else 1.0)
     except pygame.error:
-        pass            # no hi ha música carregada (p. ex. sense .ogg al navegador)
+        pass
 
 
 def music_pause():
@@ -702,7 +635,7 @@ def draw_particles():
 
 
 # ---------------------------------------------------------------
-# ONES EXPANSIVES (explosions d'atacs)
+# ONES EXPANSIVES
 # ---------------------------------------------------------------
 
 rings = []
@@ -733,7 +666,7 @@ def draw_rings():
 
 
 # ---------------------------------------------------------------
-# TEXTOS FLOTANTS (+punts, -mal, COMBO...)
+# TEXTOS FLOTANTS
 # ---------------------------------------------------------------
 
 popups = []
@@ -796,12 +729,10 @@ def draw_player_shadow(cx, feet_y, platforms):
 
 
 # ---------------------------------------------------------------
-# AMBIENT AMB PARALLAX: núvols de dia, estrelles de nit
-# Es dibuixa sobre el fons i es mou lleugerament amb el jugador.
+# AMBIENT AMB PARALLAX
 # ---------------------------------------------------------------
 
 NIGHT_LEVELS = {3, 6, 9}
-
 _cloud_cache = {}
 
 CLOUDS = [
@@ -835,7 +766,6 @@ def _cloud_surface(scale):
         h = int(70 * key)
 
         s = pygame.Surface((w, h), pygame.SRCALPHA)
-
         col = (255, 255, 255, 95)
 
         pygame.draw.ellipse(s, col, (0, int(h * 0.40), w, int(h * 0.55)))
@@ -878,7 +808,7 @@ def draw_ambient(level, now, player_x):
 
 
 # ---------------------------------------------------------------
-# TRANSICIONS (fade)
+# TRANSICIONS
 # ---------------------------------------------------------------
 
 _fade_in = {'start': 0, 'dur': 0}
@@ -1048,31 +978,24 @@ class GameState:
         self.jump_count = 0
         self.is_ducking = False
 
-        # jump buffering
         self.jump_buffer_until = 0
 
         self.alive = True
         self.death_music_played = False
-        self.death_fx = False                # explosió en morir
+        self.death_fx = False
 
-        # Vida extra (habilitat de Pikachu) i invulnerabilitat en reviure
         self.extra_lives = ability_level(ACTIVE['nom'], 'vida_extra')
         self.player_invuln_until = 0
 
-        # [NOU8] Canvi de personatge dins del nivell: cadascú guarda les seves vides
         self.lives_by_char = {ACTIVE['nom']: self.extra_lives}
         self.switch_ready_at = 0
 
-        # Valors que main() actualitza cada frame segons les habilitats
         self.boss_damage = 1
         self.stomp_bounce = 0
 
         self.collected_pokeballs = 0
-
-        # punts guanyats en aquest nivell (es guarden en completar-lo)
         self.level_points = 0
 
-        # combo de pokeballs
         self.combo = 0
         self.last_pickup_at = 0
 
@@ -1086,31 +1009,28 @@ class GameState:
 
         self.enemy_size = (30, 30)
 
-        # [NOU6] Enemics amb comportaments variats (vegeu ENEMY_AI i move_enemy)
         self.enemies = []
-        self.enemy_speeds = []       # només s'usa el signe: cap on mira
+        self.enemy_speeds = []
         self.enemy_kind = []
         self.enemy_hp = []
         self.enemy_hp_max = []
         self.enemy_base_y = []
         self.enemy_phase = []
-        self.enemy_ai = {}           # dades de comportament (clau = id del rect)
+        self.enemy_ai = {}
 
         self._spawn_enemies()
         self._spawn_ground_enemy()
 
-        # Atacs del jugador
         self.attacks = []
         self.attack_ready_at = 0
         self.special_ready_at = 0
-        self.special_cd_total = 1            # per a la barra de recàrrega
+        self.special_cd_total = 1
 
         if self.is_boss:
             self.pokeballs = []
         else:
             self.pokeballs = self.generate_pokeballs(8)
 
-        # valor en punts de cada pokeball (mateix ordre que self.pokeballs)
         self.pokeball_values = [
             pokeball_points_for_level(level) for _ in self.pokeballs
         ]
@@ -1118,10 +1038,14 @@ class GameState:
         self.total_pokeballs = len(self.pokeballs)
 
         # -------------------------------------------------------
-        # BOSS
+        # BOSS VIDA AJUSTADA SEGONS DIFICULTAT
         # -------------------------------------------------------
 
-        self.boss_hp = BOSS_MAX_HP
+        mult = diff().get('boss_hp_mult', 1.0)
+        self.boss_max_hp = round(BOSS_BASE_HP * mult)
+        self.boss_hp = self.boss_max_hp
+        self.boss_phase2_hp = self.boss_max_hp / 2
+        self.boss_platform_damage_hp = self.boss_max_hp * 0.75
 
         self.boss_w = 290
         self.boss_h = 260
@@ -1153,10 +1077,6 @@ class GameState:
 
         self.boss_dead = False
 
-        # -------------------------------------------------------
-        # PLATAFORMES DEL BOSS
-        # -------------------------------------------------------
-
         self.boss_platforms_deteriorated = False
         self.boss_platform_event = "active"
         self.boss_platform_event_until = 0
@@ -1173,7 +1093,6 @@ class GameState:
         init_boss_extras(self)
 
     def swap_lives(self, old_nom, new_nom):
-        """En canviar de personatge, cadascú guarda les seves vides extra del nivell."""
 
         self.lives_by_char[old_nom] = self.extra_lives
 
@@ -1183,17 +1102,16 @@ class GameState:
         self.extra_lives = self.lives_by_char[new_nom]
 
     def _add_enemy(self, rect, kind, ai, **extra):
-        """Afegeix un enemic a totes les llistes i guarda les seves dades d'IA."""
 
         if kind == GROUND_ENEMY_KIND and diff()['wolf_hp']:
-            hp = diff()['wolf_hp']                       # llop: vida fixa
+            hp = diff()['wolf_hp']
         else:
             hp = max(1, round(ENEMY_HP_BY_KIND[kind] * diff()['hp']))
 
         direction = random.choice([-1, 1])
 
         self.enemies.append(rect)
-        self.enemy_speeds.append(direction * 3)   # només el signe importa
+        self.enemy_speeds.append(direction * 3)
         self.enemy_kind.append(kind)
         self.enemy_hp.append(hp)
         self.enemy_hp_max.append(hp)
@@ -1214,7 +1132,6 @@ class GameState:
         self.enemy_ai[id(rect)] = data
 
     def _spawn_flyer(self, kind, w, h):
-        """Volador sinusoïdal: busca una zona de l'aire lliure de plataformes."""
 
         amp = ENEMY_AI['sine']['amp']
 
@@ -1227,7 +1144,6 @@ class GameState:
 
             r = pygame.Rect(x, y, w, h)
 
-            # primer exigim espai lliure per a tota l'ona; després, només per a l'enemic
             zone = r.inflate(0, 2 * amp) if attempt < 60 else r
 
             if zone.collidelist(self.platforms) == -1 and abs(x - 120) > 200:
@@ -1240,14 +1156,12 @@ class GameState:
         self._add_enemy(rect, kind, 'sine')
 
     def _spawn_enemies(self):
-        """Reparteix els comportaments entre les plataformes del nivell."""
 
         if self.is_boss:
             return
 
         platforms = self.platforms[1:]
 
-        # Quines plataformes es queden amb enemic (a l'atzar)
         keep = set(random.sample(range(len(platforms)), enemies_to_keep(len(platforms))))
 
         for i, p in enumerate(platforms):
@@ -1257,7 +1171,6 @@ class GameState:
 
             ai = ENEMY_AI_CYCLE[i % len(ENEMY_AI_CYCLE)]
 
-            # Fàcil i normal: no hi ha perseguidors, només patrulles
             if ai == 'chaser' and not diff()['chase']:
                 ai = 'patrol'
 
@@ -1268,7 +1181,6 @@ class GameState:
             left = max(p.left, 0)
             right = min(p.right, WIDTH)
 
-            # Si la plataforma és massa estreta (o fora de pantalla), vola
             if ai in ('patrol', 'chaser') and right - left < w + 20:
                 ai = 'sine'
                 kind = AI_KIND[ai]
@@ -1278,7 +1190,6 @@ class GameState:
                 self._spawn_flyer(kind, w, h)
                 continue
 
-            # camina per la plataforma (planeja 6 px per sobre) sense néixer a sobre del jugador
             x = random.randint(left, right - w)
 
             for _ in range(30):
@@ -1291,14 +1202,12 @@ class GameState:
             self._add_enemy(rect, kind, ai, bounds=(left, right))
 
     def _spawn_ground_enemy(self):
-        """Llop terrestre: només als nivells GROUND_ENEMY_LEVELS, i només un."""
 
         if self.level not in GROUND_ENEMY_LEVELS or not ground_frames[0] or not diff()['ground_enemy']:
             return
 
         w, h = ground_info['size']
 
-        # Plataformes del terra (la seva part de dalt és el terra)
         floor = [p for p in self.platforms if p.top == HEIGHT - 50]
 
         if not floor:
@@ -1307,7 +1216,6 @@ class GameState:
         def visible(p):
             return min(p.right, WIDTH) - max(p.left, 0)
 
-        # Agafa el tros de terra més ample (així té espai per caminar)
         best = max(visible(p) for p in floor)
 
         plat = random.choice([p for p in floor if visible(p) == best])
@@ -1318,7 +1226,6 @@ class GameState:
         if right - left < w + 10:
             return
 
-        # Si es pot, no neix a sobre del jugador
         lo = max(left, 350)
         hi = right - w
 
@@ -1341,8 +1248,6 @@ class GameState:
 
                 pokeball_x = random.randint(100, WIDTH - 100)
 
-                # [NOU3] flota sempre 12 px per sobre de la plataforma,
-                # sigui quina sigui la mida de la bola
                 pokeball_y = random.choice(
                     [p.top - POKEBALL_SIZE - 12 for p in self.platforms]
                 )
@@ -1376,10 +1281,6 @@ class GameState:
 
         return pokeballs
 
-    # ===========================================================
-    # RESET
-    # ===========================================================
-
     def reset(self, level=None, keep_boss_hp=False):
 
         if level is None:
@@ -1396,19 +1297,18 @@ class GameState:
         if keep_boss_hp and level == BOSS_LEVEL:
 
             self.boss_hp = old_boss_hp
-            self.boss_hp = max(0, min(self.boss_hp, BOSS_MAX_HP))
+            self.boss_hp = max(0, min(self.boss_hp, self.boss_max_hp))
 
-            # la barra fantasma comença igual que la vida
             self.boss_hp_ghost = float(self.boss_hp)
 
-            if old_boss_phase == 2 or self.boss_hp <= BOSS_PHASE2_HP:
+            if old_boss_phase == 2 or self.boss_hp <= self.boss_phase2_hp:
                 self.boss_phase = 2
             else:
                 self.boss_phase = 1
 
             if (
                 old_platforms_deteriorated
-                or self.boss_hp <= BOSS_PLATFORM_DAMAGE_HP
+                or self.boss_hp <= self.boss_platform_damage_hp
             ):
                 deteriorate_boss_platforms(self)
 
@@ -1539,16 +1439,15 @@ CHARACTERS = []
 
 platform_texture = None
 float_platform_texture = None
-pokeball_texture = None          # ultraball (2 punts)
-pokeball_small_texture = None    # pokeball petita (1 punt)
+pokeball_texture = None
+pokeball_small_texture = None
 enemy_texture1 = None
 enemy_texture2 = None
-enemy_chaser_texture = None      # [NOU6] abella vermella (perseguidora)
+enemy_chaser_texture = None
 
-# [NOU4] fotogrames del llop: 0 = mira a la dreta, 1 = mira a l'esquerra
 ground_frames = {0: [], 1: []}
-ground_bob = []                   # desplaçament vertical de cada fotograma
-ground_info = {'size': None}      # mida de la hitbox
+ground_bob = []
+ground_info = {'size': None}
 
 boss_frames = []
 
@@ -1557,7 +1456,6 @@ logo_texture = None
 
 
 def remove_logo_background(surf):
-    """Treu el fons (blau clar / blanc) connectat a les vores. Versió ràpida amb bytes."""
 
     w, h = surf.get_size()
 
@@ -1652,7 +1550,6 @@ def load_boss_frames():
 
 
 def _scale_ground(img, crop, k):
-    """Retalla amb un rectangle comú, escala amb el mateix factor i deixa'l mirant a la DRETA."""
 
     img = img.subsurface(crop).copy()
 
@@ -1682,15 +1579,12 @@ def load_ground_enemy():
     if base_bb.width <= 0 or base_bb.height <= 0:
         return
 
-    # Mateixa escala per a tots els fotogrames (surt de la imatge de repòs)
     k = GROUND_ENEMY_HEIGHT / base_bb.height
 
-    # Hitbox = mida de la imatge de repòs escalada
     ground_info['size'] = (
         max(1, int(base_bb.width * k)), max(1, int(base_bb.height * k))
     )
 
-    # Fotogrames propis (terra_corre1..4.png), opcionals
     raw_frames = []
 
     for n in range(1, 5):
@@ -1700,8 +1594,6 @@ def load_ground_enemy():
 
     if raw_frames:
 
-        # Tots els fotogrames es retallen amb el MATEIX rectangle (la unió),
-        # així no canvien de mida ni "salten" quan es mouen les potes.
         crop = base_bb.copy()
 
         for img in raw_frames:
@@ -1711,12 +1603,10 @@ def load_ground_enemy():
 
         frames = [_scale_ground(img, crop, k) for img in raw_frames]
 
-        # Petit rebot als fotogrames "de pas" (els parells), com un trot
         bob = [(-1 if i % 2 else 0) for i in range(len(frames))]
 
     else:
 
-        # Sense fotogrames: caminar simulat amb l'única imatge
         base = _scale_ground(raw_base, base_bb, k)
 
         frames = [
@@ -1736,10 +1626,6 @@ def load_ground_enemy():
 
 
 def load_textures():
-    """
-    Generador: carrega les textures per passos i, abans de cada pas, retorna
-    un missatge. Així es pot mostrar una pantalla de càrrega (vegeu load_all).
-    """
 
     global platform_texture
     global float_platform_texture
@@ -1768,7 +1654,6 @@ def load_textures():
 
     enemy_texture1 = pygame.image.load('assets/volador1.png')
 
-    # [NOU6] Perseguidora: la mateixa abella tenyida de vermell
     enemy_chaser_texture = enemy_texture1.copy()
     enemy_chaser_texture.fill((90, 0, 0), special_flags=pygame.BLEND_RGB_ADD)
     enemy_chaser_texture.fill((255, 150, 150), special_flags=pygame.BLEND_RGB_MULT)
@@ -1780,8 +1665,6 @@ def load_textures():
 
     yield 'Carregant pokeballs'
 
-    # Les dues boles es retallen i s'escalen a POKEBALL_SIZE, que és
-    # també la mida de la hitbox: així la imatge i la hitbox coincideixen.
     ultra_raw = pygame.image.load('assets/ultraball2.png').convert_alpha()
 
     ub = ultra_raw.get_bounding_rect()
@@ -1793,8 +1676,6 @@ def load_textures():
         ultra_raw, (POKEBALL_SIZE, POKEBALL_SIZE)
     )
 
-    # Pokeball petita: el PNG té la bola a un racó i la resta
-    # transparent, així que es retalla i s'escala a la mida de l'ultraball.
     if os.path.exists('assets/pokeball.png'):
 
         raw = pygame.image.load('assets/pokeball.png').convert_alpha()
@@ -1810,7 +1691,6 @@ def load_textures():
 
     else:
 
-        # Si falta el fitxer, fem servir l'ultraball
         pokeball_small_texture = pokeball_texture
 
     yield 'Carregant el boss'
@@ -1825,9 +1705,6 @@ def load_textures():
 
     yield 'Preparant el logo'
 
-    # El logo és OPCIONAL: si no hi és, el menú mostra el títol en text.
-    #   assets/logo_transparent.png -> es fa servir tal qual (el més ràpid)
-    #   assets/logo.png             -> es redueix i se li treu el fons
     logo_texture = None
     logo_raw = None
 
@@ -1839,9 +1716,6 @@ def load_textures():
 
         logo_raw = pygame.image.load('assets/logo.png').convert_alpha()
 
-        # Reduïm el logo abans de treure-li el fons: el recorregut píxel a píxel
-        # és lent (sobretot al navegador) i amb la imatge gran podia deixar la
-        # pantalla en negre molts segons. (Escala "nearest" perquè no es barregin colors.)
         if max(logo_raw.get_size()) > 400:
             k = 400 / max(logo_raw.get_size())
             logo_raw = pygame.transform.scale(
@@ -1867,14 +1741,12 @@ def load_textures():
     yield 'Llest!'
 
 
-# Les textures es carreguen a load_all() (amb pantalla de càrrega).
 load_sfx()
 load_save()
 load_records()
 
 
 def enemy_hitbox_size(kind):
-    """[NOU3] Mida de la hitbox: el volador gran (kind 1) fa la mida de la seva imatge."""
 
     if kind == 1:
         return enemy_texture2.get_size()
@@ -1887,16 +1759,12 @@ def get_player_hitbox(x, y, ducking):
     if ducking:
         return pygame.Rect(x + 10, y + 10, 20, 10)
 
-    # Cos àgil: la hitbox s'encongeix per dalt i pels costats,
-    # però els peus es queden al mateix lloc (si no, el jugador
-    # deixaria de detectar el terra).
     s = ability_level(ACTIVE['nom'], 'cos_agil') * 2
 
     return pygame.Rect(x + 5 + s, y + 5 + 2 * s, 30 - 2 * s, 30 - 2 * s)
 
 
 def try_revive(gs, now):
-    """Vida extra: si ha mort i li queden vides, reviu amb invulnerabilitat."""
 
     if gs.alive:
         return
@@ -1937,14 +1805,12 @@ def _to_gray(surf):
     else:
         g = surf.copy()
 
-    # Més fosc perquè es noti bé que no està disponible
     g.fill((150, 150, 150), special_flags=pygame.BLEND_RGB_MULT)
 
     return g
 
 
 def get_face(index, size, gray=False):
-    """Icona quadrada amb la cara d'un personatge (en color o en gris amb una X)."""
 
     key = (index, size, gray)
 
@@ -2004,7 +1870,6 @@ def get_face(index, size, gray=False):
 
 
 def draw_character_faces(current, used_characters, x, y, size=36, gap=8):
-    """Fila de cares: color = disponible, gris + X = ja ha mort amb ell."""
 
     for i in range(len(CHARACTERS)):
 
@@ -2048,7 +1913,6 @@ def draw_cd_bar(x, y, w, h, frac, color):
 # ===============================================================
 
 def attacks_unlocked(nom):
-    """Els atacs es desbloquegen en comprar el nivell 1 de l'especial."""
 
     if not BASIC_ATTACK_REQUIRES_SPECIAL:
         return True
@@ -2085,12 +1949,6 @@ def _add_attack(gs, kind, cx, cy, d, size, speed, life, color, dmg=1,
 
 
 def fire_basic(gs, nom, d):
-    """
-    Atac bàsic (X / J). Cada personatge té el seu:
-      Pikachu -> espurna elèctrica en ziga-zaga
-      Jolteon -> agulla ràpida i fina
-      Flareon -> brasa ardent amb cua de flama
-    """
 
     cx = gs.player_x + PLAYER_SIZE[0] // 2 + d * 20
     cy = gs.player_y + PLAYER_SIZE[1] // 2
@@ -2125,11 +1983,7 @@ def fire_basic(gs, nom, d):
 
 def fire_special(gs, nom, d):
     """
-    Atac especial (C / K). Retorna el cooldown en ms, o 0 si el
-    personatge encara no ha comprat l'habilitat.
-      Pikachu -> llamp llarg que toca tot el que té al davant
-      Jolteon -> ona de plasma (anell) que travessa els enemics
-      Flareon -> cometa de foc que explota amb una ona expansiva
+    Atac especial (C / K). Temps de recàrrega augmentat.
     """
 
     sid = SPECIAL_BY_CHAR.get(nom)
@@ -2147,7 +2001,6 @@ def fire_special(gs, nom, d):
 
     color = ATTACK_COLORS.get(nom, WHITE)
 
-    # Pikachu: llamp molt llarg (220 / 280 / 340 px).
     if sid == 'cua':
 
         reach = 220 + 60 * (lvl - 1)
@@ -2157,9 +2010,8 @@ def fire_special(gs, nom, d):
             dmg=special_damage('cua', lvl), pierce=True, follow=True, w=reach, h=54
         )
 
-        return 800 - 100 * (lvl - 1)
+        return 1500 - 150 * (lvl - 1)  # Recàrrega augmentada
 
-    # Jolteon: anell elèctric alt que travessa tots els enemics.
     if sid == 'plasma':
 
         _add_attack(
@@ -2167,9 +2019,8 @@ def fire_special(gs, nom, d):
             dmg=special_damage('plasma', lvl), pierce=True, w=34, h=72
         )
 
-        return 700 - 100 * (lvl - 1)
+        return 1300 - 150 * (lvl - 1)  # Recàrrega augmentada
 
-    # Flareon: cometa de foc que explota i fa mal als enemics del voltant.
     if sid == 'foc':
 
         _add_attack(
@@ -2178,13 +2029,12 @@ def fire_special(gs, nom, d):
             splash=(0, 0, 70, 110)[lvl]
         )
 
-        return 900 - 100 * (lvl - 1)
+        return 1700 - 150 * (lvl - 1)  # Recàrrega augmentada
 
     return 0
 
 
 def move_enemy(gs, i, enemy, player_hitbox, slow, now):
-    """Mou un enemic segons el seu comportament (patrol / chaser / ground_chaser / sine)."""
 
     d = gs.enemy_ai.get(id(enemy))
 
@@ -2192,16 +2042,11 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
         return
 
     ai = d['ai']
-
     cfg = ENEMY_AI[ai]
 
-    reduce = min(slow, 2)               # habilitat Enemics lents (Flareon)
+    reduce = min(slow, 2)
+    mult = diff()['speed']
 
-    mult = diff()['speed']              # velocitat segons la dificultat
-
-    # ------------------------------------------------------------
-    # Volador sinusoïdal: rebota amb els costats de la pantalla i de les plataformes
-    # ------------------------------------------------------------
     if ai == 'sine':
 
         speed = max(mult, cfg['speed'] * mult - reduce)
@@ -2225,9 +2070,6 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
         if test.collidelist(gs.platforms) == -1:
             enemy.y = y
 
-    # ------------------------------------------------------------
-    # Caminadors: només dins els límits de la seva plataforma
-    # ------------------------------------------------------------
     else:
 
         left, right = d['bounds']
@@ -2252,7 +2094,7 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
             d['dir'] = 1 if dx > 0 else -1
 
         if chasing and abs(dx) < 6:
-            move = 0.0                      # ja és sota el jugador: no tremola
+            move = 0.0
         else:
             move = max(mult, speed - reduce)
 
@@ -2282,20 +2124,17 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
 
         else:
 
-            # petit balanceig vertical (només cap amunt, mai dins la plataforma)
             enemy.y = d['base_y'] - int((1 + math.sin(now / 350 + d['phase'])) * 3)
 
-        # avís "!" quan comença a perseguir
         if chasing and not d['alert']:
             add_popup(enemy.centerx, enemy.top - 20, '!', (255, 70, 70), 28)
 
         d['alert'] = chasing
 
-    gs.enemy_speeds[i] = d['dir'] * 3       # cap on mira
+    gs.enemy_speeds[i] = d['dir'] * 3
 
 
 def hit_enemy(gs, i, dmg, color):
-    """Resta vida a l'enemic i, si arriba a 0, l'elimina."""
 
     e = gs.enemies[i]
 
@@ -2307,7 +2146,6 @@ def hit_enemy(gs, i, dmg, color):
         e.centerx, e.centery, color, 8, speed=3, life=300, size=4, gravity=0.1
     )
 
-    # número de mal
     add_popup(e.centerx, e.top - 6, f'-{shown}', (255, 230, 120), 20)
 
     if gs.enemy_hp[i] <= 0:
@@ -2330,7 +2168,6 @@ def hit_enemy(gs, i, dmg, color):
 
 
 def damage_boss(gs, now):
-    """Mal al boss per atac (mateix mal que trepitjar-lo)."""
 
     dmg = getattr(gs, 'boss_damage', 1)
 
@@ -2347,7 +2184,7 @@ def damage_boss(gs, now):
 
     if gs.boss_hp <= 0:
         gs.boss_dead = True
-    elif gs.boss_phase == 1 and gs.boss_hp <= BOSS_PHASE2_HP:
+    elif gs.boss_phase == 1 and gs.boss_hp <= gs.boss_phase2_hp:
         _enter_phase2(gs, now)
 
 
@@ -2361,7 +2198,6 @@ def update_attacks(gs, now):
         r = a['rect']
 
         if a['follow']:
-            # El llamp es queda enganxat al jugador
             if a['dir'] > 0:
                 r.left = px + 10
             else:
@@ -2378,7 +2214,6 @@ def update_attacks(gs, now):
             gs.attacks.remove(a)
             continue
 
-        # ---------------- Efectes visuals per tipus ----------------
         kind = a['kind']
 
         if kind in ('ring', 'fire', 'ember') and random.random() < 0.7:
@@ -2400,7 +2235,6 @@ def update_attacks(gs, now):
                 size=3, gravity=0.1
             )
 
-        # ---------------- Enemics ----------------
         consumed = False
 
         for i in range(len(gs.enemies) - 1, -1, -1):
@@ -2424,7 +2258,6 @@ def update_attacks(gs, now):
                     gravity=0.05
                 )
 
-                # ona expansiva
                 spawn_ring(ex, ey, a['color'], a['splash'])
 
                 for j in range(len(gs.enemies) - 1, -1, -1):
@@ -2445,7 +2278,6 @@ def update_attacks(gs, now):
             gs.attacks.remove(a)
             continue
 
-        # ---------------- Boss ----------------
         if gs.is_boss and 'boss' not in a['hit'] and r.colliderect(gs.boss_rect):
 
             a['hit'].add('boss')
@@ -2456,13 +2288,11 @@ def update_attacks(gs, now):
             if kind == 'fire':
                 spawn_ring(r.centerx, r.centery, a['color'], 80)
 
-            # el llamp es manté uns frames, la resta es gasten
             if not a['follow']:
                 gs.attacks.remove(a)
 
 
 def _zigzag(x0, x1, cy, amp, n):
-    """Punts d'una línia en ziga-zaga (per als llamps)."""
 
     pts = []
 
@@ -2485,7 +2315,6 @@ def draw_attacks(gs):
         col = a['color']
         cx, cy = r.center
 
-        # ---- Pikachu: llamp llarg amb brillantor i ramificació ----
         if kind == 'bolt':
 
             x0, x1 = (r.left, r.right) if d > 0 else (r.right, r.left)
@@ -2502,7 +2331,6 @@ def draw_attacks(gs):
 
             pygame.draw.lines(screen, col, False, branch, 2)
 
-        # ---- Pikachu: espurna en ziga-zaga ----
         elif kind == 'spark':
 
             pts = []
@@ -2515,7 +2343,6 @@ def draw_attacks(gs):
             pygame.draw.lines(screen, col, False, pts, 5)
             pygame.draw.lines(screen, WHITE, False, pts, 2)
 
-        # ---- Jolteon: agulla fina amb rastre ----
         elif kind == 'needle':
 
             tip = (cx + d * 17, cy)
@@ -2528,7 +2355,6 @@ def draw_attacks(gs):
             pygame.draw.polygon(screen, col, [tip, t1, t2])
             pygame.draw.line(screen, WHITE, (cx - d * 14, cy), tip, 2)
 
-        # ---- Jolteon: anell elèctric alt amb punts que giren ----
         elif kind == 'ring':
 
             pulse = int(4 * math.sin(age * 0.5))
@@ -2547,7 +2373,6 @@ def draw_attacks(gs):
                     3
                 )
 
-        # ---- Flareon: brasa amb cua de flama ----
         elif kind == 'ember':
 
             fl = random.randint(-2, 2)
@@ -2560,7 +2385,6 @@ def draw_attacks(gs):
             pygame.draw.circle(screen, col, (cx, cy), 8)
             pygame.draw.circle(screen, (255, 230, 120), (cx, cy), 4)
 
-        # ---- Flareon: cometa de foc ----
         elif kind == 'fire':
 
             rad = r.width // 2
@@ -2617,7 +2441,6 @@ def init_boss_extras(gs):
     gs.boss_edge_choice_done = False
     gs.boss_platform_pre_roar = False
 
-    # barra fantasma i flaix de cop
     gs.boss_hp_ghost = float(gs.boss_hp)
     gs.boss_flash_until = 0
 
@@ -2649,7 +2472,6 @@ def _choose_attack(gs):
     return random.choices(names, weights=[pool[n] for n in names])[0]
 
 
-# Quan es reprèn de la pausa, desplaça tots els temporitzadors
 _BOSS_TIMERS = (
     'boss_next_action', 'boss_invuln_until', 'boss_next_shot',
     'boss_phase_until', 'boss_shake_until', 'boss_windup_until',
@@ -2698,7 +2520,6 @@ def deteriorate_boss_platforms(gs):
 
         new_width = max(90, int(platform.width * BOSS_PLATFORM_DAMAGE_SCALE))
 
-        # MATEIX GRUIX
         new_height = platform.height
 
         platform.width = new_width
@@ -2709,7 +2530,6 @@ def deteriorate_boss_platforms(gs):
 
         gs.boss_platform_damaged_rects.append(platform.copy())
 
-        # Trossos visuals
         for _ in range(random.randint(10, 16)):
 
             piece_x = random.randint(platform.left, platform.right)
@@ -2815,7 +2635,6 @@ def start_boss_platform_attack(gs, now):
     gs.boss_platform_event = "pre_roar"
     gs.boss_platform_pre_roar = True
 
-    # 2-3 segons quiet abans del crit
     gs.boss_platform_event_until = now + random.randint(
         BOSS_PLATFORM_PRE_ROAR_MIN,
         BOSS_PLATFORM_PRE_ROAR_MAX
@@ -2829,10 +2648,6 @@ def update_boss_platform_attack(gs, now):
 
     if not gs.is_boss:
         return
-
-    # -----------------------------------------------------------
-    # PREPARACIÓ ABANS DEL CRIT
-    # -----------------------------------------------------------
 
     if gs.boss_platform_event == "pre_roar":
 
@@ -2859,10 +2674,6 @@ def update_boss_platform_attack(gs, now):
 
             gs.boss_next_shot = now + 400
 
-    # -----------------------------------------------------------
-    # ATAC ESPECIAL
-    # -----------------------------------------------------------
-
     elif gs.boss_platform_event == "special_attack":
 
         hide_boss_platforms(gs)
@@ -2878,10 +2689,6 @@ def update_boss_platform_attack(gs, now):
             gs.boss_walking = False
 
             hide_boss_platforms(gs)
-
-    # -----------------------------------------------------------
-    # PARPELLEIG DE RETORN
-    # -----------------------------------------------------------
 
     elif gs.boss_platform_event == "return_warning":
 
@@ -2921,11 +2728,9 @@ def _enter_phase2(gs, now):
     gs.boss_meteors.clear()
     gs.boss_waves.clear()
 
-    # Primer crit
     gs.boss_phase_until = now + BOSS_PHASE2_ROAR_TIME
     gs.boss_shake_until = now + BOSS_PHASE2_ROAR_TIME
 
-    # Boss quiet
     gs.boss_walking = False
     gs.boss_static_frame = 0
     gs.boss_pending = None
@@ -2950,17 +2755,13 @@ def _launch_attack(gs, kind, rage, now):
     ox = gs.boss_rect.centerx
     oy = gs.boss_rect.top + 70
 
-    # -----------------------------------------------------------
-    # ORB
-    # -----------------------------------------------------------
-
     if kind == 'orb':
 
         direction = -1 if px < gs.boss_rect.centerx else 1
 
         sx = gs.boss_rect.left - 28 if direction == -1 else gs.boss_rect.right
 
-        vx = direction * (5 + rage * 0.5 + (1.5 if fase2 else 0))
+        vx = direction * (5 + rage * 0.2 + (1.5 if fase2 else 0))
 
         alçades = [HEIGHT - 50 - 26, HEIGHT - 50 - 110]
 
@@ -2970,19 +2771,12 @@ def _launch_attack(gs, kind, rage, now):
         for y in alçades:
             _new_shot(gs, sx, y, vx, 0)
 
-    # -----------------------------------------------------------
-    # FAN DE BOLES
-    # -----------------------------------------------------------
-
     elif kind == 'fan':
 
-        # FASE 1 = 3 boles, FASE 2 = 6 boles
         n = 6 if fase2 else 3
-
-        # MÉS SEPARADES EN FASE 2
         spread = 0.48 if fase2 else 0.28
 
-        speed = 5 + rage * 0.3 + (1 if fase2 else 0)
+        speed = 5 + rage * 0.15 + (1 if fase2 else 0)
 
         base = math.atan2(py - oy, px - ox)
 
@@ -2996,13 +2790,9 @@ def _launch_attack(gs, kind, rage, now):
                 math.sin(ang) * speed
             )
 
-    # -----------------------------------------------------------
-    # HOMING
-    # -----------------------------------------------------------
-
     elif kind == 'homing':
 
-        speed = 3.8 + rage * 0.1
+        speed = 3.8 + rage * 0.05
 
         dx = px - ox
         dy = py - oy
@@ -3018,10 +2808,6 @@ def _launch_attack(gs, kind, rage, now):
             homing_until=now + 1800,
             speed=speed
         )
-
-    # -----------------------------------------------------------
-    # METEORS
-    # -----------------------------------------------------------
 
     elif kind == 'meteors':
 
@@ -3041,10 +2827,6 @@ def _launch_attack(gs, kind, rage, now):
                 'warn_until': now + warn + i * 120,
                 'rect': pygame.Rect(int(x), -40, 28, 28)
             })
-
-    # -----------------------------------------------------------
-    # WAVE
-    # -----------------------------------------------------------
 
     elif kind == 'wave':
 
@@ -3080,7 +2862,7 @@ def update_boss(gs, player_hitbox):
 
     update_boss_platform_debris(gs)
 
-    rage = BOSS_MAX_HP - gs.boss_hp
+    rage = gs.boss_max_hp - gs.boss_hp
 
     fase2 = (gs.boss_phase == 2)
 
@@ -3088,20 +2870,12 @@ def update_boss(gs, player_hitbox):
 
     charging = (gs.boss_pending is not None)
 
-    # -----------------------------------------------------------
-    # DETERIORAMENT AL 75%
-    # -----------------------------------------------------------
-
     if (
         gs.boss_phase == 1
         and not gs.boss_platforms_deteriorated
-        and gs.boss_hp <= BOSS_PLATFORM_DAMAGE_HP
+        and gs.boss_hp <= gs.boss_platform_damage_hp
     ):
         deteriorate_boss_platforms(gs)
-
-    # -----------------------------------------------------------
-    # ATAC ESPECIAL DE PLATAFORMES
-    # -----------------------------------------------------------
 
     update_boss_platform_attack(gs, now)
 
@@ -3112,10 +2886,6 @@ def update_boss(gs, player_hitbox):
     px = gs.player_x + PLAYER_SIZE[0] // 2
     py = gs.player_y + PLAYER_SIZE[1] // 2
 
-    # -----------------------------------------------------------
-    # DESPRÉS DEL PRIMER CRIT, TORNA A MOURE'S
-    # -----------------------------------------------------------
-
     if (
         gs.boss_phase == 2
         and gs.boss_phase_until > 0
@@ -3123,10 +2893,6 @@ def update_boss(gs, player_hitbox):
         and not platform_special
     ):
         gs.boss_walking = True
-
-    # -----------------------------------------------------------
-    # MOVIMENT
-    # -----------------------------------------------------------
 
     if not platform_special:
 
@@ -3140,16 +2906,12 @@ def update_boss(gs, player_hitbox):
 
         if gs.boss_walking and not in_roar and not charging:
 
-            speed = gs.boss_speed + rage * 0.15
+            speed = gs.boss_speed + rage * 0.05
 
             if fase2:
                 speed *= 1.6
 
             gs.boss_x += gs.boss_dir * speed
-
-    # -----------------------------------------------------------
-    # PUNTS
-    # -----------------------------------------------------------
 
     at_left = (gs.boss_x <= 20)
     at_right = (gs.boss_x >= WIDTH - 20 - gs.boss_w)
@@ -3159,16 +2921,8 @@ def update_boss(gs, player_hitbox):
     elif at_right:
         gs.boss_x = WIDTH - 20 - gs.boss_w
 
-    # -----------------------------------------------------------
-    # QUAN S'ALLUNYA D'UNA PUNTA
-    # -----------------------------------------------------------
-
     if not at_left and not at_right:
         gs.boss_edge_choice_done = False
-
-    # -----------------------------------------------------------
-    # FASE 2: RANDOM 1 / 2 / 3
-    # -----------------------------------------------------------
 
     if (
         fase2
@@ -3188,18 +2942,10 @@ def update_boss(gs, player_hitbox):
             gs.boss_static_frame = 0
             gs.boss_dir = 1 if at_left else -1
 
-    # -----------------------------------------------------------
-    # FRAME FIX
-    # -----------------------------------------------------------
-
     if gs.boss_walking:
         gs.boss_static_frame = 0
 
     gs.boss_rect.x = int(gs.boss_x)
-
-    # -----------------------------------------------------------
-    # ATACS
-    # -----------------------------------------------------------
 
     if not in_roar:
 
@@ -3216,17 +2962,12 @@ def update_boss(gs, player_hitbox):
 
             gs.boss_pending = None
 
-            # FASE 2: UNA MICA MÉS SEPARAT EN EL TEMPS
             if fase2:
-                cooldown = max(1000, 1700 - rage * 100)
+                cooldown = max(1000, 1700 - rage * 50)
             else:
-                cooldown = max(1100, 2200 - rage * 250)
+                cooldown = max(1100, 2200 - rage * 100)
 
             gs.boss_next_shot = now + cooldown
-
-    # -----------------------------------------------------------
-    # ESFERES
-    # -----------------------------------------------------------
 
     for shot in gs.boss_shots[:]:
 
@@ -3246,7 +2987,6 @@ def update_boss(gs, player_hitbox):
         shot['rect'].x = int(shot['x'])
         shot['rect'].y = int(shot['y'])
 
-        # rastre lluminós darrere dels projectils
         if random.random() < 0.6:
             spawn_particles(
                 shot['rect'].centerx, shot['rect'].centery,
@@ -3263,10 +3003,6 @@ def update_boss(gs, player_hitbox):
 
         elif player_hitbox.colliderect(shot['rect']):
             gs.alive = False
-
-    # -----------------------------------------------------------
-    # METEORS
-    # -----------------------------------------------------------
 
     for m in gs.boss_meteors[:]:
 
@@ -3292,10 +3028,6 @@ def update_boss(gs, player_hitbox):
         elif m['rect'].collidelist(gs.platforms) != -1:
             gs.boss_meteors.remove(m)
 
-    # -----------------------------------------------------------
-    # ONES
-    # -----------------------------------------------------------
-
     for w in gs.boss_waves[:]:
 
         w['x'] += w['vx']
@@ -3306,10 +3038,6 @@ def update_boss(gs, player_hitbox):
             gs.boss_waves.remove(w)
         elif player_hitbox.colliderect(w['rect']):
             gs.alive = False
-
-    # -----------------------------------------------------------
-    # COL·LISIÓ AMB EL BOSS
-    # -----------------------------------------------------------
 
     if player_hitbox.colliderect(gs.boss_rect) and now >= gs.boss_invuln_until:
 
@@ -3324,7 +3052,6 @@ def update_boss(gs, player_hitbox):
 
             gs.boss_invuln_until = now + 1500
 
-            # flaix blanc, partícules, número de mal i so
             gs.boss_flash_until = now + 250
             spawn_particles(
                 player_hitbox.centerx, gs.boss_rect.top + 20,
@@ -3349,7 +3076,7 @@ def update_boss(gs, player_hitbox):
 
             if gs.boss_hp <= 0:
                 gs.boss_dead = True
-            elif gs.boss_phase == 1 and gs.boss_hp <= BOSS_PHASE2_HP:
+            elif gs.boss_phase == 1 and gs.boss_hp <= gs.boss_phase2_hp:
                 _enter_phase2(gs, now)
 
         else:
@@ -3376,10 +3103,6 @@ def draw_boss(gs):
 
     now = pygame.time.get_ticks()
 
-    # -----------------------------------------------------------
-    # METEORS
-    # -----------------------------------------------------------
-
     for m in gs.boss_meteors:
 
         if not m['falling']:
@@ -3405,10 +3128,6 @@ def draw_boss(gs):
         else:
             screen.blit(shot_texture, m['rect'])
 
-    # -----------------------------------------------------------
-    # ONES
-    # -----------------------------------------------------------
-
     for w in gs.boss_waves:
 
         r = w['rect']
@@ -3429,10 +3148,6 @@ def draw_boss(gs):
             ]
         )
 
-    # -----------------------------------------------------------
-    # ESFERES
-    # -----------------------------------------------------------
-
     for shot in gs.boss_shots:
 
         screen.blit(shot_texture, shot['rect'])
@@ -3442,17 +3157,8 @@ def draw_boss(gs):
                 screen, (255, 60, 60), shot['rect'].center, 18, 3
             )
 
-    # -----------------------------------------------------------
-    # BOSS
-    # -----------------------------------------------------------
-
     in_roar = (now < gs.boss_phase_until)
-
     charging = (gs.boss_pending is not None)
-
-    # -----------------------------------------------------------
-    # ANIMACIÓ
-    # -----------------------------------------------------------
 
     boss_is_stationary = (
         not gs.boss_walking
@@ -3467,10 +3173,8 @@ def draw_boss(gs):
     else:
         idx = (now // BOSS_FRAME_MS) % len(boss_frames)
 
-    # ombra del boss
     blit_shadow(gs.boss_rect.centerx, HEIGHT - 50, 230, 18, 100)
 
-    # resplendor vermell en fase 2
     if gs.boss_phase == 2:
         pulse = 0.5 + 0.5 * math.sin(now / 200)
         aura = pygame.Surface((gs.boss_w + 120, gs.boss_h + 60), pygame.SRCALPHA)
@@ -3485,10 +3189,6 @@ def draw_boss(gs):
              gs.boss_rect.centery - aura.get_height() // 2)
         )
 
-    # -----------------------------------------------------------
-    # DIBUIX
-    # -----------------------------------------------------------
-
     if not (
         now < gs.boss_invuln_until
         and not in_roar
@@ -3502,7 +3202,6 @@ def draw_boss(gs):
         if gs.boss_phase == 2:
             img = _boss_tinted(idx, d, img)
 
-        # flaix blanc quan rep un cop
         if now < gs.boss_flash_until:
             img = img.copy()
             img.fill((140, 140, 140), special_flags=pygame.BLEND_RGB_ADD)
@@ -3518,10 +3217,6 @@ def draw_boss(gs):
 
         screen.blit(img, (bx, by))
 
-    # -----------------------------------------------------------
-    # ! ATAC
-    # -----------------------------------------------------------
-
     if charging:
 
         mark = _font(60, True).render('!', True, (255, 60, 60))
@@ -3531,10 +3226,6 @@ def draw_boss(gs):
             (gs.boss_rect.centerx - mark.get_width() // 2,
              gs.boss_rect.top - 70)
         )
-
-    # -----------------------------------------------------------
-    # CRIT
-    # -----------------------------------------------------------
 
     if now < gs.boss_platform_roar_until:
 
@@ -3558,20 +3249,19 @@ def draw_boss_bar(gs):
     x = WIDTH // 2 - bar_w // 2
     y = 20
 
-    # la barra fantasma baixa suaument cap a la vida real
     gs.boss_hp_ghost = max(float(gs.boss_hp), gs.boss_hp_ghost - 0.03)
 
     pygame.draw.rect(screen, BLACK, (x - 3, y - 3, bar_w + 6, bar_h + 6))
 
     pygame.draw.rect(screen, (90, 0, 0), (x, y, bar_w, bar_h))
 
-    ghost = max(0, gs.boss_hp_ghost) / BOSS_MAX_HP
+    ghost = max(0, gs.boss_hp_ghost) / gs.boss_max_hp
 
     pygame.draw.rect(
         screen, (255, 225, 190), (x, y, int(bar_w * ghost), bar_h)
     )
 
-    vida = max(0, gs.boss_hp) / BOSS_MAX_HP
+    vida = max(0, gs.boss_hp) / gs.boss_max_hp
 
     pygame.draw.rect(
         screen,
@@ -3636,7 +3326,6 @@ def get_menu_buttons():
 
 
 def menu_play_label(used_characters):
-    """Text del primer botó i si hi ha una partida començada."""
 
     has_run = PROGRESS['level'] is not None or bool(used_characters)
 
@@ -3651,10 +3340,6 @@ def menu_play_label(used_characters):
 
 
 def return_to_menu(gs, used_characters):
-    """
-    Torna al menú. Si encara queden personatges vius es manté el progrés
-    (nivell i personatges morts); si han mort tots, es comença de zero.
-    """
 
     if len(used_characters) >= len(CHARACTERS):
         used_characters.clear()
@@ -3681,7 +3366,6 @@ def show_start_menu(play_label='JUGAR', has_run=False):
 
     else:
 
-        # Sense logo: títol en text
         t1 = _font(64, True).render('POKÉMON PLATFORMER', True, YELLOW)
         t2 = _font(40, True).render('Poké Ball Quest', True, WHITE)
 
@@ -3721,24 +3405,20 @@ def show_start_menu(play_label='JUGAR', has_run=False):
              rect.centery - text_surface.get_height() // 2)
         )
 
-    # dificultat actual (D = canviar-la)
     dcfg = diff()
 
     dl = _font(24, True).render(f"Dificultat: {dcfg['nom']}  (D)", True, dcfg['color'])
 
     screen.blit(dl, (WIDTH // 2 - dl.get_width() // 2, 322))
 
-    # [NOU5] avís per començar de zero
     if has_run:
         rh = _font(20, True).render('R = començar una partida nova', True, YELLOW)
         screen.blit(rh, (WIDTH // 2 - rh.get_width() // 2, HEIGHT - 52))
 
-    # punts guanyats fins ara
     pts = _font(26, True).render(f'Punts: {SAVE["points"]}', True, GOLD)
 
     screen.blit(pts, (WIDTH - pts.get_width() - 20, 20))
 
-    # indicador de silenci
     if MUTED['on']:
         mt = _font(22, True).render('MUT (N)', True, (255, 120, 120))
         screen.blit(mt, (20, 20))
@@ -3838,7 +3518,7 @@ def show_difficulty(selected_index):
 
 
 # ===============================================================
-# BOTIGA D'HABILITATS (5 habilitats per personatge)
+# BOTIGA D'HABILITATS
 # ===============================================================
 
 def show_shop(char_index, ability_index, message, message_ok):
@@ -3858,8 +3538,6 @@ def show_shop(char_index, ability_index, message, message_ok):
     pts = _font(28, True).render(f'Punts: {SAVE["points"]}', True, GOLD)
 
     screen.blit(pts, (WIDTH // 2 - pts.get_width() // 2, 74))
-
-    # ---------------- Personatges ----------------
 
     n = len(CHARACTERS)
 
@@ -3904,8 +3582,6 @@ def show_shop(char_index, ability_index, message, message_ok):
             (x + card_w // 2 - name.get_width() // 2, card_y + card_h - 32)
         )
 
-    # ---------------- Habilitats ----------------
-
     ch = CHARACTERS[char_index]
 
     abilities = get_abilities(ch.nom)
@@ -3948,7 +3624,6 @@ def show_shop(char_index, ability_index, message, message_ok):
 
         screen.blit(desc, (row_x + 18, y + 38))
 
-        # Nivell (punts plens / buits)
         for k in range(max_level):
 
             cx = row_x + row_w - 290 + k * 30
@@ -3962,7 +3637,6 @@ def show_shop(char_index, ability_index, message, message_ok):
 
             pygame.draw.circle(screen, WHITE, (cx, cy), 10, 2)
 
-        # Preu / màxim
         if level >= max_level:
 
             price = _font(24, True).render('MÀXIM', True, GREEN)
@@ -3984,8 +3658,6 @@ def show_shop(char_index, ability_index, message, message_ok):
             (row_x + row_w - price.get_width() - 20,
              y + row_h // 2 - price.get_height() // 2 + 10)
         )
-
-    # ---------------- Missatge i ajuda ----------------
 
     if message:
 
@@ -4457,7 +4129,6 @@ def play_music(path, loop=False):
     except (pygame.error, FileNotFoundError):
         return
 
-    # en carregar música nova el volum es reinicia: el tornem a aplicar
     apply_volume()
 
     pygame.mixer.music.play(-1 if loop else 0)
@@ -4467,11 +4138,10 @@ JUMP_KEYS = (pygame.K_SPACE, pygame.K_UP, pygame.K_w)
 
 
 # ===============================================================
-# PANTALLA DE CÀRREGA I ERRORS (important al navegador: sense això,
-# mentre es carreguen les imatges només es veuria la pantalla negra)
+# PANTALLA DE CÀRREGA I ERRORS
 # ===============================================================
 
-LOAD_STEPS = 7        # nombre de passos que retorna load_textures()
+LOAD_STEPS = 7
 
 
 def draw_loading(msg, step):
@@ -4499,7 +4169,6 @@ def draw_loading(msg, step):
 
 
 async def load_all():
-    """Carrega les textures per passos, cedint el control al navegador entre cadascun."""
 
     draw_loading('Iniciant', 0)
 
@@ -4517,7 +4186,6 @@ async def load_all():
 
 
 def show_fatal(err):
-    """Mostra l'error de Python a la pantalla (si no, només es veuria a la consola)."""
 
     import textwrap
 
@@ -4594,15 +4262,12 @@ async def game():
     final_best = None
     final_is_record = False
 
-    # pausa i detecció d'aterratge
     pause_snapshot = None
     pause_started = 0
     prev_on_ground = True
 
-    # dificultat
     diff_index = DIFFICULTY_ORDER.index(DIFFICULTY['key'])
 
-    # botiga
     shop_char = 0
     shop_ability = 0
     shop_msg = ''
@@ -4611,7 +4276,6 @@ async def game():
 
     while running:
 
-        # cedeix el control al navegador (imprescindible per a pygbag)
         await asyncio.sleep(0)
 
         pokemon_state = "peu"
@@ -4638,14 +4302,12 @@ async def game():
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_n:
                     toggle_mute()
 
-                # D = canviar la dificultat des del menú
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_d:
 
                     k = DIFFICULTY_ORDER.index(DIFFICULTY['key'])
 
                     DIFFICULTY['key'] = DIFFICULTY_ORDER[(k + 1) % len(DIFFICULTY_ORDER)]
 
-                # [NOU5] R = partida nova (esborra el progrés)
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
 
                     reset_progress()
@@ -4663,7 +4325,6 @@ async def game():
 
                     if buttons[0].collidepoint(event.pos):
 
-                        # primer es tria la dificultat, després el personatge
                         diff_index = DIFFICULTY_ORDER.index(DIFFICULTY['key'])
 
                         game_state = 'difficulty'
@@ -4950,7 +4611,6 @@ async def game():
 
                         await fade_out()
 
-                        # Conserva la vida del boss
                         gs.reset(gs.level, keep_boss_hp=True)
 
                         gs.start_time = time.time()
@@ -5077,7 +4737,6 @@ async def game():
 
                         dt = pygame.time.get_ticks() - pause_started
 
-                        # El temps de pausa no compta
                         gs.start_time += dt / 1000
                         shift_boss_timers(gs, dt)
 
@@ -5093,11 +4752,9 @@ async def game():
 
             pause_requested = False
 
-            # ---- Valors segons les habilitats del personatge actiu ----
             nom = player_char.nom
 
             def lv(ab_id):
-                # sempre mira el personatge actual (també si canvies a mig frame)
                 return ability_level(player_char.nom, ab_id)
 
             speed = PLAYER_SPEED + lv('velocitat')
@@ -5116,11 +4773,9 @@ async def game():
 
                 if event.type == pygame.KEYDOWN:
 
-                    # Silenci
                     if event.key == pygame.K_n:
                         toggle_mute()
 
-                    # Pausa
                     if event.key in (pygame.K_p, pygame.K_ESCAPE) and gs.alive:
                         pause_requested = True
 
@@ -5138,10 +4793,8 @@ async def game():
                             play_sfx('salt')
 
                         else:
-                            # Jump buffering: recorda el salt
                             gs.jump_buffer_until = current_time + JUMP_BUFFER_MS
 
-                    # Atac bàsic (X / J)
                     if (
                         event.key in ATTACK_KEYS
                         and gs.alive
@@ -5154,7 +4807,6 @@ async def game():
 
                         play_sfx('atac')
 
-                    # Atac especial (C / K): només si l'has comprat
                     if (
                         event.key in SPECIAL_KEYS
                         and gs.alive
@@ -5168,7 +4820,6 @@ async def game():
 
                             play_sfx('atac')
 
-                    # Canviar de personatge (1-2-3 o TAB)
                     if (
                         event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_TAB)
                         and gs.alive
@@ -5198,7 +4849,6 @@ async def game():
                             sprite_index = 0
                             last_change_frame_time = current_time
 
-                            # efecte de canvi
                             sw_col = ATTACK_COLORS.get(nom, WHITE)
                             sw_x = gs.player_x + PLAYER_SIZE[0] // 2
                             sw_y = gs.player_y + PLAYER_SIZE[1] // 2
@@ -5210,7 +4860,6 @@ async def game():
                             spawn_ring(sw_x, sw_y, sw_col, 50, 300)
                             add_popup(sw_x, gs.player_y - 20, nom, sw_col, 24)
 
-                # Salt variable: si deixes anar la tecla, saltes menys
                 if event.type == pygame.KEYUP and event.key in JUMP_KEYS:
                     if gs.velocity_y < -5:
                         gs.velocity_y *= JUMP_CUT_FACTOR
@@ -5225,10 +4874,6 @@ async def game():
                 continue
 
             if gs.alive:
-
-                # ------------------------------------------------
-                # MOVIMENT
-                # ------------------------------------------------
 
                 if keys[pygame.K_LEFT] and gs.player_x > 0:
 
@@ -5262,10 +4907,6 @@ async def game():
                     direccio = 0
 
                     gs.player_x += speed
-
-                # ------------------------------------------------
-                # GRAVETAT
-                # ------------------------------------------------
 
                 next_y = gs.player_y + gs.velocity_y
 
@@ -5314,7 +4955,6 @@ async def game():
 
                     gs.player_y = next_y
 
-                # pols en aterrar i en córrer
                 feet_cx = gs.player_x + PLAYER_SIZE[0] // 2
                 feet_y = gs.player_y + PLAYER_SIZE[1]
 
@@ -5334,7 +4974,6 @@ async def game():
 
                 prev_on_ground = on_ground
 
-                # Jump buffering: salta just en aterrar
                 if on_ground and gs.jump_buffer_until > current_time:
 
                     gs.velocity_y = jump_str
@@ -5343,22 +4982,12 @@ async def game():
 
                     play_sfx('salt')
 
-                # ------------------------------------------------
-                # CAIGUDA
-                # ------------------------------------------------
-
                 if gs.player_y > HEIGHT:
                     gs.alive = False
 
                 player_hitbox = get_player_hitbox(
                     gs.player_x, gs.player_y, gs.is_ducking
                 )
-
-                # ------------------------------------------------
-                # POKEBALLS (cada una té el seu valor en punts)
-                # L'imant fa més gran la zona on les recollim.
-                # Combo: pokeballs seguides donen punts extra.
-                # ------------------------------------------------
 
                 magnet = player_hitbox.inflate(
                     30 * lv('imant'), 30 * lv('imant')
@@ -5395,7 +5024,6 @@ async def game():
 
                         gs.level_points += gained
 
-                        # espurnes i so (daurades = 2 punts, vermelles = 1 punt)
                         spawn_particles(
                             pokeball.centerx, pokeball.centery,
                             GOLD if value >= 2 else (255, 90, 90), 14,
@@ -5415,24 +5043,16 @@ async def game():
 
                         play_sfx('pokeball')
 
-                # ------------------------------------------------
-                # ENEMICS
-                # Cada tipus té el seu comportament; trepitjar-los els mata.
-                # Es recorre al revés perquè hit_enemy pot esborrar-ne.
-                # ------------------------------------------------
-
                 for i in range(len(gs.enemies) - 1, -1, -1):
 
                     enemy = gs.enemies[i]
 
-                    # [NOU6] moviment segons el comportament de cada enemic
                     move_enemy(
                         gs, i, enemy, player_hitbox, lv('enemics_lents'), current_time
                     )
 
                     if player_hitbox.colliderect(enemy):
 
-                        # Trepitjar: caient i amb els peus per la part de dalt de l'enemic
                         if (
                             gs.velocity_y > 0
                             and not on_ground
@@ -5445,7 +5065,6 @@ async def game():
                                 gs, i, ENEMY_STOMP_DAMAGE.get(gs.enemy_kind[i], 99), YELLOW
                             )
 
-                            # efecte d'aixafament
                             spawn_ring(ex, etop, YELLOW, 40, 250)
 
                             gs.velocity_y = jump_str * 0.8
@@ -5455,16 +5074,7 @@ async def game():
 
                             gs.alive = False
 
-                # ------------------------------------------------
-                # ATACS DEL JUGADOR
-                # (abans del boss: si un atac el mata, es detecta aquest frame)
-                # ------------------------------------------------
-
                 update_attacks(gs, pygame.time.get_ticks())
-
-                # ------------------------------------------------
-                # BOSS
-                # ------------------------------------------------
 
                 if gs.is_boss:
 
@@ -5483,23 +5093,16 @@ async def game():
 
                         play_music('assets/musica2.mp3')
 
-                # ------------------------------------------------
-                # NIVELL COMPLETAT
-                # ------------------------------------------------
-
                 if not gs.pokeballs and not gs.is_boss:
 
                     time_taken = time.time() - gs.start_time
 
-                    # Ara es guarden els punts del nivell
                     points_gained = gs.level_points
 
                     add_points(points_gained)
 
-                    # [NOU5] recorda l'últim nivell completat
                     PROGRESS['level'] = max(PROGRESS['level'] or 0, gs.level)
 
-                    # rècord de temps del nivell
                     is_record, best_time = submit_record(record_key(gs.level), time_taken)
 
                     def draw_victory():
@@ -5545,7 +5148,6 @@ async def game():
                             if event.type != pygame.KEYDOWN:
                                 continue
 
-                            # ---------- Botiga entre nivells ----------
                             if in_shop:
 
                                 n_abilities = len(get_abilities(CHARACTERS[shop_char].nom))
@@ -5588,7 +5190,6 @@ async def game():
 
                                 continue
 
-                            # ---------- Pantalla de nivell completat ----------
                             if event.key == pygame.K_b:
 
                                 in_shop = True
@@ -5624,39 +5225,27 @@ async def game():
 
                                 music_replay()
 
-            # Vida extra: si ha mort i li queden vides, reviu
             try_revive(gs, pygame.time.get_ticks())
-
-            # =====================================================
-            # DIBUIX
-            # =====================================================
 
             screen.fill(BLACK)
 
             if gs.level in LEVEL_BACKGROUNDS:
                 imprimir_pantalla_fons(LEVEL_BACKGROUNDS[gs.level])
 
-            # -----------------------------------------------------
-            # PLATAFORMES
-            # -----------------------------------------------------
-
             now = pygame.time.get_ticks()
 
-            # núvols / estrelles amb parallax
             draw_ambient(gs.level, now, gs.player_x)
 
             for platform_index, platform in enumerate(gs.platforms):
 
                 is_upper_boss_platform = gs.is_boss and platform_index > 0
 
-                # Fora durant l'atac especial
                 if (
                     is_upper_boss_platform
                     and gs.boss_platform_event == "special_attack"
                 ):
                     continue
 
-                # Parpellegen abans de tornar
                 if (
                     is_upper_boss_platform
                     and gs.boss_platform_event == "return_warning"
@@ -5694,15 +5283,7 @@ async def game():
                 for x in range(0, platform.width, 50):
                     screen.blit(texture, (platform.x + x, platform.y))
 
-            # -----------------------------------------------------
-            # PEDRES
-            # -----------------------------------------------------
-
             draw_boss_platform_debris(gs)
-
-            # -----------------------------------------------------
-            # POKEBALLS (textura segons el valor)
-            # -----------------------------------------------------
 
             for pokeball, value in zip(gs.pokeballs, gs.pokeball_values):
 
@@ -5714,17 +5295,12 @@ async def game():
 
                 screen.blit(tex, (pokeball.x, pokeball.y))
 
-            # -----------------------------------------------------
-            # ENEMICS (amb barreta de vida si ja han rebut algun cop)
-            # -----------------------------------------------------
-
             for i, enemy in enumerate(gs.enemies):
 
                 flip = gs.enemy_speeds[i] < 0
 
                 if gs.enemy_kind[i] == GROUND_ENEMY_KIND:
 
-                    # [NOU4] Llop: animació de caminar, alineat pels peus
                     frames = ground_frames[1 if flip else 0]
 
                     fi = (now // GROUND_ENEMY_FRAME_MS) % len(frames)
@@ -5755,7 +5331,6 @@ async def game():
 
                 if gs.enemy_hp[i] < gs.enemy_hp_max[i]:
 
-                    # [NOU3] la barra s'adapta a l'amplada de l'enemic
                     w = enemy.width
                     frac = gs.enemy_hp[i] / gs.enemy_hp_max[i]
 
@@ -5768,16 +5343,8 @@ async def game():
                         (enemy.centerx - w // 2, enemy.y - 8, int(w * frac), 4)
                     )
 
-            # -----------------------------------------------------
-            # BOSS
-            # -----------------------------------------------------
-
             if gs.is_boss:
                 draw_boss(gs)
-
-            # -----------------------------------------------------
-            # PERSONATGE
-            # -----------------------------------------------------
 
             if pokemon_state == "camina":
 
@@ -5806,14 +5373,12 @@ async def game():
 
                 dy = 0
 
-            # ombra del jugador
             draw_player_shadow(
                 gs.player_x + PLAYER_SIZE[0] // 2,
                 gs.player_y + PLAYER_SIZE[1],
                 gs.platforms
             )
 
-            # Parpelleja mentre és invulnerable (després de reviure)
             if not (
                 current_time < gs.player_invuln_until
                 and (current_time // 100) % 2 == 0
@@ -5826,10 +5391,8 @@ async def game():
                     dy
                 )
 
-            # Atacs del jugador
             draw_attacks(gs)
 
-            # partícules i textos flotants (damunt del món, sota el HUD)
             update_particles()
             draw_particles()
 
@@ -5838,10 +5401,6 @@ async def game():
 
             update_popups()
             draw_popups()
-
-            # -----------------------------------------------------
-            # HUD
-            # -----------------------------------------------------
 
             font = _font(30)
 
@@ -5867,7 +5426,6 @@ async def game():
 
                 screen.blit(pokeball_text, (810, 60))
 
-                # punts totals (+ els d'aquest nivell, pendents de guardar)
                 points_text = font.render(
                     f'Punts: {SAVE["points"]} (+{gs.level_points})',
                     True,
@@ -5881,7 +5439,6 @@ async def game():
 
             screen.blit(level_text, (20, 20))
 
-            # dificultat activa
             hud_diff = diff()
 
             screen.blit(
@@ -5889,11 +5446,8 @@ async def game():
                 (level_text.get_width() + 34, 28)
             )
 
-            # cares dels personatges sota el nivell:
-            # color = es pot utilitzar, gris amb X = ja ha mort
             draw_character_faces(selected, used_characters, 20, 62)
 
-            # Barra de recàrrega de l'atac bàsic
             if attacks_unlocked(nom):
 
                 basic_left = max(0, gs.attack_ready_at - current_time)
@@ -5912,7 +5466,6 @@ async def game():
 
                 screen.blit(lock_text, (20, 102))
 
-            # Indicador de l'atac especial (només si l'has comprat)
             special_id = SPECIAL_BY_CHAR.get(nom)
 
             if special_id and lv(special_id) > 0:
@@ -5927,7 +5480,6 @@ async def game():
 
                 screen.blit(sp_text, (20, 114))
 
-                # barra de recàrrega de l'especial
                 special_left = max(0, gs.special_ready_at - current_time)
 
                 draw_cd_bar(
@@ -5936,7 +5488,6 @@ async def game():
                     GOLD if ready else (200, 140, 40)
                 )
 
-            # Vides extra que queden
             if gs.extra_lives > 0:
 
                 life_text = _font(20, True).render(
@@ -5945,7 +5496,6 @@ async def game():
 
                 screen.blit(life_text, (20, 150))
 
-            # Combo actiu
             if (
                 gs.combo >= 2
                 and gs.last_pickup_at > 0
@@ -5958,7 +5508,6 @@ async def game():
 
                 screen.blit(combo_text, (20, 176))
 
-            # Pista per canviar de personatge
             if len(CHARACTERS) - len(used_characters) > 1:
 
                 sw_hint = _font(16, True).render(
@@ -5967,7 +5516,6 @@ async def game():
 
                 screen.blit(sw_hint, (20, HEIGHT - 54))
 
-            # Silenci
             if MUTED['on']:
 
                 mute_text = _font(20, True).render(
@@ -5976,10 +5524,6 @@ async def game():
 
                 screen.blit(mute_text, (20, HEIGHT - 30))
 
-            # -----------------------------------------------------
-            # BOSS BAR
-            # -----------------------------------------------------
-
             if gs.is_boss:
 
                 draw_boss_bar(gs)
@@ -5987,7 +5531,7 @@ async def game():
                 if time.time() - gs.start_time < 5:
 
                     hint = font.render(
-                        f'Salta-li al cap {BOSS_MAX_HP} cops! Esquiva els atacs!',
+                        f'Salta-li al cap {gs.boss_max_hp} cops! Esquiva els atacs!',
                         True,
                         YELLOW
                     )
@@ -5997,15 +5541,10 @@ async def game():
                         (WIDTH // 2 - hint.get_width() // 2, 110)
                     )
 
-            # =====================================================
-            # MORT
-            # =====================================================
-
             if not gs.alive:
 
                 used_characters.add(selected)
 
-                # explosió de partícules una sola vegada
                 if not gs.death_fx:
 
                     gs.death_fx = True
@@ -6094,7 +5633,6 @@ async def game():
 
             apply_boss_shake(gs)
 
-            # fade in en començar el nivell
             draw_fade_in()
 
             pygame.display.flip()
@@ -6105,6 +5643,4 @@ async def game():
     pygame.quit()
 
 
-# pygbag (navegador) necessita aquesta crida al final, sense "if __name__ ...";
-# a l'ordinador també funciona.
 asyncio.run(main())
