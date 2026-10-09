@@ -1719,6 +1719,17 @@ def load_textures():
     pygame.draw.circle(shot_texture, (255, 255, 255), (14, 14), 5)
 
     logo_raw = pygame.image.load('assets/logo.png').convert_alpha()
+
+    # Reduïm el logo abans de treure-li el fons: el recorregut píxel a píxel
+    # és lent (sobretot al navegador) i amb la imatge gran podia deixar la
+    # pantalla en negre molts segons. (Escala "nearest" perquè no es barregin colors.)
+    if max(logo_raw.get_size()) > 400:
+        k = 400 / max(logo_raw.get_size())
+        logo_raw = pygame.transform.scale(
+            logo_raw,
+            (max(1, int(logo_raw.get_width() * k)), max(1, int(logo_raw.get_height() * k)))
+        )
+
     logo_raw = remove_logo_background(logo_raw)
 
     bbox = logo_raw.get_bounding_rect()
