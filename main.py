@@ -1387,45 +1387,69 @@ logo_texture = None
 
 
 def remove_logo_background(surf):
+    """Treu el fons (blau clar / blanc) connectat a les vores. Versió ràpida amb bytes."""
 
     w, h = surf.get_size()
 
+    to_bytes = getattr(pygame.image, 'tobytes', None) or pygame.image.tostring
+    from_bytes = getattr(pygame.image, 'frombytes', None) or pygame.image.fromstring
+
+    data = bytearray(to_bytes(surf, 'RGBA'))
+
+    seen = bytearray(w * h)
+
     stack = []
-    visited = set()
 
     for x in range(w):
-        stack.append((x, 0))
-        stack.append((x, h - 1))
+        stack.append(x)
+        stack.append((h - 1) * w + x)
 
     for y in range(h):
-        stack.append((0, y))
-        stack.append((w - 1, y))
+        stack.append(y * w)
+        stack.append(y * w + w - 1)
 
-    def es_fons(color):
-        r, g, b, a = color
-        if a == 0:
-            return True
-        blau_clar = (b >= r + 12 and g >= r - 5 and b > 145)
-        blanc_fons = (r > 238 and g > 238 and b > 238)
-        return blau_clar or blanc_fons
+    last_row = w * (h - 1)
 
     while stack:
 
-        x, y = stack.pop()
+        i = stack.pop()
 
-        if x < 0 or y < 0 or x >= w or y >= h or (x, y) in visited:
+        if seen[i]:
             continue
 
-        visited.add((x, y))
+        seen[i] = 1
 
-        if not es_fons(surf.get_at((x, y))):
-            continue
+        o = i * 4
 
-        surf.set_at((x, y), (255, 255, 255, 0))
+        if data[o + 3]:
 
-        stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+            r = data[o]
+            g = data[o + 1]
+            b = data[o + 2]
 
-    return surf
+            blau_clar = (b >= r + 12 and g >= r - 5 and b > 145)
+            blanc_fons = (r > 238 and g > 238 and b > 238)
+
+            if not (blau_clar or blanc_fons):
+                continue
+
+        data[o] = 255
+        data[o + 1] = 255
+        data[o + 2] = 255
+        data[o + 3] = 0
+
+        x = i % w
+
+        if x > 0:
+            stack.append(i - 1)
+        if x < w - 1:
+            stack.append(i + 1)
+        if i >= w:
+            stack.append(i - w)
+        if i < last_row:
+            stack.append(i + w)
+
+    return from_bytes(bytes(data), (w, h), 'RGBA').convert_alpha()
 
 
 def load_boss_frames():
@@ -1553,6 +1577,8 @@ def load_textures():
     global shot_texture
     global logo_texture
 
+    yield 'Carregant personatges'
+
     CHARACTERS.append(make_pikachu())
 
     if os.path.exists('assets/jolteon.png'):
@@ -1560,6 +1586,8 @@ def load_textures():
 
     if os.path.exists('assets/flareon.png'):
         CHARACTERS.append(make_eevee_evolution('Flareon', 'assets/flareon.png'))
+
+    yield 'Carregant plataformes i enemics'
 
     platform_texture = pygame.image.load('assets/plataforma1.png')
     float_platform_texture = pygame.image.load('assets/plataforma1.png')
@@ -1572,7 +1600,11 @@ def load_textures():
     enemy_chaser_texture.fill((255, 150, 150), special_flags=pygame.BLEND_RGB_MULT)
     enemy_texture2 = pygame.image.load('assets/volador2.png')
 
+    yield 'Preparant el llop'
+
     load_ground_enemy()
+
+    yield 'Carregant pokeballs'
 
     # Les dues boles es retallen i s'escalen a POKEBALL_SIZE, que és
     # també la mida de la hitbox: així la imatge i la hitbox coincideixen.
@@ -1607,6 +1639,8 @@ def load_textures():
         # Si falta el fitxer, fem servir l'ultraball
         pokeball_small_texture = pokeball_texture
 
+    yield 'Carregant el boss'
+
     load_boss_frames()
 
     shot_texture = pygame.Surface((28, 28), pygame.SRCALPHA)
@@ -1614,6 +1648,8 @@ def load_textures():
     pygame.draw.circle(shot_texture, (70, 10, 120), (14, 14), 14)
     pygame.draw.circle(shot_texture, (170, 80, 230), (14, 14), 10)
     pygame.draw.circle(shot_texture, (255, 255, 255), (14, 14), 5)
+
+    yield 'Preparant el logo (pot tardar uns segons)'
 
     if os.path.exists('assets/logo_transparent.png'):
 
@@ -1645,8 +1681,9 @@ def load_textures():
 
     logo_texture = pygame.transform.smoothscale(logo_raw, (280, 280))
 
+    yield 'Llest!'
 
-load_textures()
+
 load_sfx()
 load_save()
 load_records()
@@ -4152,7 +4189,97 @@ JUMP_KEYS = (pygame.K_SPACE, pygame.K_UP, pygame.K_w)
 # MAIN
 # ===============================================================
 
+LOAD_STEPS = 7
+
+
+def draw_loading(msg, step):
+    """Pantalla de càrrega: així no es veu mai la pantalla negra sense saber què passa."""
+
+    screen.fill((10, 20, 45))
+
+    big = pygame.font.Font(None, 56)
+    small = pygame.font.Font(None, 34)
+
+    title = big.render('Pokémon Platformer', True, WHITE)
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 110))
+
+    text = small.render(msg + '...', True, YELLOW)
+    screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 30))
+
+    bar_w = 400
+    x = WIDTH // 2 - bar_w // 2
+    y = HEIGHT // 2 + 30
+
+    pygame.draw.rect(screen, (60, 70, 100), (x, y, bar_w, 20))
+    pygame.draw.rect(screen, GOLD, (x, y, int(bar_w * min(1.0, step / LOAD_STEPS)), 20))
+    pygame.draw.rect(screen, WHITE, (x, y, bar_w, 20), 2)
+
+    pygame.display.flip()
+
+
+async def load_all():
+    """Carrega les textures per passos, cedint el control al navegador entre cadascun."""
+
+    draw_loading('Iniciant', 0)
+
+    await asyncio.sleep(0.05)
+
+    step = 0
+
+    for msg in load_textures():
+
+        draw_loading(msg, step)
+
+        step += 1
+
+        await asyncio.sleep(0.05)
+
+
+def show_fatal(err):
+    """Mostra l'error de Python a la pantalla (si no, només es veuria a la consola)."""
+
+    import textwrap
+
+    screen.fill((45, 0, 0))
+
+    font = pygame.font.Font(None, 24)
+
+    lines = ['ERROR - fes una captura d\'aquesta pantalla:', '']
+
+    for raw in err.splitlines():
+        lines.extend(textwrap.wrap(raw, 110) or [''])
+
+    y = 8
+
+    for line in lines[:2] + lines[2:][-28:]:
+        screen.blit(font.render(line, True, WHITE), (10, y))
+        y += 24
+
+    pygame.display.flip()
+
+
 async def main():
+
+    try:
+
+        await load_all()
+
+        await game()
+
+    except Exception:
+
+        import traceback
+
+        err = traceback.format_exc()
+
+        print(err)
+
+        while True:
+            show_fatal(err)
+            await asyncio.sleep(0.2)
+
+
+async def game():
 
     clock = pygame.time.Clock()
 
