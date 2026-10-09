@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://arcaro123.github.io/PokemonQuest/sitemap.xml
