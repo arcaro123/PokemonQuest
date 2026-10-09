@@ -64,11 +64,16 @@ _boss_fonts = {}
 def _font(size, bold=False):
     key = (size, bold)
     if key not in _boss_fonts:
-        try:
-            _boss_fonts[key] = pygame.font.SysFont('Arial', size, bold=bold)
-        except Exception:
-            # Al navegador no hi ha fonts del sistema: fem servir la per defecte
-            _boss_fonts[key] = pygame.font.Font(None, int(size * 1.3))
+        if sys.platform == 'emscripten':
+            # Al navegador no hi ha fonts del sistema (SysFont és lent o falla)
+            f = pygame.font.Font(None, int(size * 1.3))
+            f.set_bold(bold)
+            _boss_fonts[key] = f
+        else:
+            try:
+                _boss_fonts[key] = pygame.font.SysFont('Arial', size, bold=bold)
+            except Exception:
+                _boss_fonts[key] = pygame.font.Font(None, int(size * 1.3))
     return _boss_fonts[key]
 
 
@@ -1610,8 +1615,28 @@ def load_textures():
     pygame.draw.circle(shot_texture, (170, 80, 230), (14, 14), 10)
     pygame.draw.circle(shot_texture, (255, 255, 255), (14, 14), 5)
 
-    logo_raw = pygame.image.load('assets/logo.png').convert_alpha()
-    logo_raw = remove_logo_background(logo_raw)
+    if os.path.exists('assets/logo_transparent.png'):
+
+        # Logo ja amb el fons tret (recomanat per a la versió web: no cal processar-lo)
+        logo_raw = pygame.image.load('assets/logo_transparent.png').convert_alpha()
+
+    else:
+
+        logo_raw = pygame.image.load('assets/logo.png').convert_alpha()
+
+        # Es redueix ABANS de treure el fons: el recorregut píxel a píxel és
+        # molt lent amb imatges grans (sobretot al navegador).
+        biggest = max(logo_raw.get_size())
+
+        if biggest > 400:
+            k = 400 / biggest
+            logo_raw = pygame.transform.smoothscale(
+                logo_raw,
+                (max(1, int(logo_raw.get_width() * k)),
+                 max(1, int(logo_raw.get_height() * k)))
+            )
+
+        logo_raw = remove_logo_background(logo_raw)
 
     bbox = logo_raw.get_bounding_rect()
 
