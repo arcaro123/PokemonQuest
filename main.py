@@ -154,7 +154,7 @@ ATTACK_LIFE_FRAMES = 45          # ~0,75 s de vol
 ENEMY_HP_BY_KIND = {0: 2, 1: 3, 2: 4, 3: 2}  # 0 = abella, 1 = volador gran, 2 = llop, 3 = abella perseguidora
 
 # ---------------------------------------------------------------
-# [NOU4] ENEMIC TERRESTRE (llop, assets/terra.png)
+# ENEMIC TERRESTRE (llop, assets/terra.png)
 # ---------------------------------------------------------------
 
 GROUND_ENEMY_LEVELS = {4, 5, 6}
@@ -165,7 +165,7 @@ GROUND_ENEMY_FACES_LEFT = True    # a terra.png el llop mira cap a l'ESQUERRA
 GROUND_ENEMY_FRAME_MS = 120       # temps de cada fotograma de caminar
 
 # ---------------------------------------------------------------
-# [NOU6] COMPORTAMENTS DELS ENEMICS
+# COMPORTAMENTS DELS ENEMICS
 # ---------------------------------------------------------------
 
 ENEMY_AI = {
@@ -196,7 +196,7 @@ def special_damage(sid, lvl):
 
 
 # ---------------------------------------------------------------
-# [NOU7] DIFICULTAT
+# DIFICULTAT
 # ---------------------------------------------------------------
 
 DIFFICULTY_SETTINGS = {
@@ -264,23 +264,7 @@ def record_key(base):
 
 
 # ---------------------------------------------------------------
-# [NOU9] BOSS FINAL: CONFIGURACIÓ PER DIFICULTAT
-#
-#   phase_at         -> fraccions de vida on el boss canvia de fase
-#                       (1 valor = 2 fases, 2 = 3 fases, 3 = 4 fases)
-#   invuln_ms        -> temps que és invulnerable després de rebre un cop
-#   windup / cooldown-> multiplicadors de l'avís i de l'espera entre atacs
-#   proj / walk      -> multiplicadors de velocitat de projectils i del boss
-#   platform_damage  -> les plataformes es trenquen al 75 % de vida
-#   platform_attack  -> probabilitat que, a les vores, faci l'atac de
-#                       "plataformes fora" (a partir de la fase 2)
-#   attacks          -> atacs possibles (amb pes) a cada fase
-#   fan_n, meteor_n, wave_speed, homing_n, burst_n, summon_n
-#                    -> llista amb un valor per fase (o un sol número)
-#   dash_speed       -> velocitat de l'embestida (0 = no n'hi ha)
-#
-# Atacs nous: 'dash' (embestida pel terra), 'burst' (ràfega
-# apuntada) i 'summon' (invoca abelles).
+# BOSS FINAL: CONFIGURACIÓ PER DIFICULTAT
 # ---------------------------------------------------------------
 
 BOSS_SETTINGS = {
@@ -386,6 +370,8 @@ MIN_POKEBALL_DISTANCE = 60
 POKEBALL_SIZE = 40
 BASIC_ATTACK_REQUIRES_SPECIAL = True
 SPRITE_FACES_LEFT = set()
+
+# Nivell d'inici corregit al Nivell 1
 START_LEVEL = 1
 
 RESUME_AT_NEXT_LEVEL = False
@@ -447,6 +433,14 @@ BOSS_PLATFORM_SPECIAL_MAX = 7000
 BOSS_PLATFORM_RETURN_WARNING = 2000
 
 BOSS_PHASE2_ROAR_TIME = 1600      # durada del rugit en canviar de fase
+
+# ---------------------------------------------------------------
+# DERROTA DEL BOSS I GAME OVER
+# ---------------------------------------------------------------
+
+BOSS_DEATH_MS = 4600        # durada de l'animació de derrota del boss
+BOSS_DEATH_BLAST = 3000     # moment de l'explosió final
+GO_INPUT_MS = 2200          # a la pantalla de GAME OVER, fins aquí no es llegeixen tecles
 
 BOSS_SCALE = 4
 BOSS_FRAMES = 4
@@ -1091,6 +1085,7 @@ class GameState:
         self.alive = True
         self.death_music_played = False
         self.death_fx = False
+        self.game_over_at = 0
 
         self.extra_lives = ability_level(ACTIVE['nom'], 'vida_extra')
         self.player_invuln_until = 0
@@ -2248,7 +2243,7 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
 
 
 def update_dying_enemies(gs):
-    """Actualitza la posició i rotació dels enemics morts en animació de caiguda."""
+
     for de in gs.dying_enemies[:]:
         de['x'] += de['vx']
         de['y'] += de['vy']
@@ -2259,7 +2254,7 @@ def update_dying_enemies(gs):
 
 
 def update_respawns(gs, now):
-    """Fes reaparèixer els enemics voladors un cop passen els 7 segons."""
+
     for r in gs.respawning_enemies[:]:
         if now >= r['respawn_at']:
             gs._spawn_flyer(r['kind'], r['w'], r['h'])
@@ -2267,7 +2262,7 @@ def update_respawns(gs, now):
 
 
 def draw_dying_enemies(gs):
-    """Dibuixa els enemics caient i girant (sense hitbox)."""
+
     for de in gs.dying_enemies:
         k = de['kind']
         flip = de['flip']
@@ -2328,8 +2323,6 @@ def hit_enemy(gs, i, dmg, color):
             'h': e.height
         })
 
-        # Els voladors normals reapareixen als 7 s. Les abelles que invoca
-        # el boss NO reapareixen (només les invoca ell).
         if kind != GROUND_ENEMY_KIND and not gs.is_boss:
             now = pygame.time.get_ticks()
             gs.respawning_enemies.append({
@@ -2617,7 +2610,6 @@ def init_boss_extras(gs):
     gs.boss_meteors = []
     gs.boss_waves = []
 
-    # embestida, ràfega i temps d'esgotament després de l'embestida
     gs.boss_dashing = False
     gs.boss_dash_dir = 1
     gs.boss_dash_speed = 0
@@ -2635,6 +2627,12 @@ def init_boss_extras(gs):
     gs.boss_hp_ghost = float(gs.boss_hp)
     gs.boss_flash_until = 0
 
+    gs.boss_dying = False
+    gs.boss_death_start = 0
+    gs.boss_death_end = 0
+    gs.boss_death_next_boom = 0
+    gs.boss_death_blasted = False
+
 
 def _new_shot(gs, x, y, vx, vy, homing_until=0, speed=0.0):
 
@@ -2650,7 +2648,6 @@ def _new_shot(gs, x, y, vx, vy, homing_until=0, speed=0.0):
 
 
 def _choose_attack(gs, allow_dash=True):
-    """Tria el següent atac segons la fase i la dificultat."""
 
     attacks = boss_cfg()['attacks']
 
@@ -2658,7 +2655,6 @@ def _choose_attack(gs, allow_dash=True):
 
     pool.pop(gs.boss_last_attack, None)
 
-    # no embesteix si les plataformes estan fora, ni invoca si ja hi ha prou abelles
     if not allow_dash:
         pool.pop('dash', None)
 
@@ -2679,7 +2675,8 @@ _BOSS_TIMERS = (
     'boss_platform_event_until', 'boss_platform_roar_until',
     'boss_flash_until', 'boss_stun_until',
     'player_invuln_until', 'attack_ready_at', 'special_ready_at',
-    'last_pickup_at', 'switch_ready_at'
+    'last_pickup_at', 'switch_ready_at',
+    'boss_death_start', 'boss_death_end', 'boss_death_next_boom'
 )
 
 
@@ -2928,14 +2925,12 @@ def update_boss_platform_attack(gs, now):
 # ===============================================================
 
 def boss_phase_timing(gs):
-    """Camina més estona i para menys com més avançada és la fase."""
 
     gs.boss_walk_time = 800 + 250 * (gs.boss_phase - 1)
     gs.boss_stop_time = max(150, 400 - 80 * (gs.boss_phase - 1))
 
 
 def _enter_phase(gs, phase, now):
-    """Canvi de fase: rugit, tremolor, i s'esborren els atacs en curs."""
 
     gs.boss_phase = phase
 
@@ -2970,7 +2965,6 @@ def _enter_phase(gs, phase, now):
 
 
 def check_boss_phase(gs, now):
-    """Si la vida ja correspon a una fase més avançada, hi entra."""
 
     target = boss_phase_for_hp(gs, gs.boss_hp)
 
@@ -2983,7 +2977,6 @@ def check_boss_phase(gs, now):
 # ===============================================================
 
 def _summon_minions(gs, n, now):
-    """Invoca n abelles (1 de vida, només es poden trepitjar o matar)."""
 
     w, h = enemy_hitbox_size(0)
 
@@ -3007,7 +3000,6 @@ def _summon_minions(gs, n, now):
 
 
 def _launch_attack(gs, kind, prog, now):
-    """prog = progrés del combat (0 = vida plena, 1 = a punt de morir)."""
 
     cfg = boss_cfg()
 
@@ -3020,10 +3012,6 @@ def _launch_attack(gs, kind, prog, now):
 
     ox = gs.boss_rect.centerx
     oy = gs.boss_rect.top + 70
-
-    # -----------------------------------------------------------
-    # ORB: esfera rasant (dues alçades a partir de la fase 2)
-    # -----------------------------------------------------------
 
     if kind == 'orb':
 
@@ -3040,10 +3028,6 @@ def _launch_attack(gs, kind, prog, now):
 
         for y in alçades:
             _new_shot(gs, sx, y, vx, 0)
-
-    # -----------------------------------------------------------
-    # FAN: ventall d'esferes apuntades
-    # -----------------------------------------------------------
 
     elif kind == 'fan':
 
@@ -3062,10 +3046,6 @@ def _launch_attack(gs, kind, prog, now):
                 math.cos(ang) * speed, math.sin(ang) * speed
             )
 
-    # -----------------------------------------------------------
-    # HOMING: esferes teledirigides
-    # -----------------------------------------------------------
-
     elif kind == 'homing':
 
         n = max(1, bp(cfg['homing_n'], phase))
@@ -3083,10 +3063,6 @@ def _launch_attack(gs, kind, prog, now):
                 math.cos(ang) * speed, math.sin(ang) * speed,
                 homing_until=now + 1800 + 250 * i, speed=speed
             )
-
-    # -----------------------------------------------------------
-    # METEORS: pluja amb avís al terra
-    # -----------------------------------------------------------
 
     elif kind == 'meteors':
 
@@ -3108,10 +3084,6 @@ def _launch_attack(gs, kind, prog, now):
                 'warn_until': now + warn + i * 110,
                 'rect': pygame.Rect(int(x), -40, 28, 28)
             })
-
-    # -----------------------------------------------------------
-    # WAVE: ones pel terra (s'han de saltar)
-    # -----------------------------------------------------------
 
     elif kind == 'wave':
 
@@ -3136,11 +3108,6 @@ def _launch_attack(gs, kind, prog, now):
                 'rect': pygame.Rect(int(wx), wy, 40, 30)
             })
 
-    # -----------------------------------------------------------
-    # DASH: embestida d'una paret a l'altra
-    # (es pot trepitjar el cap, o refugiar-se a la plataforma de dalt)
-    # -----------------------------------------------------------
-
     elif kind == 'dash':
 
         gs.boss_dashing = True
@@ -3148,17 +3115,9 @@ def _launch_attack(gs, kind, prog, now):
         gs.boss_walking = False
         gs.boss_shake_until = now + 250
 
-    # -----------------------------------------------------------
-    # BURST: ràfega d'esferes apuntades al jugador
-    # -----------------------------------------------------------
-
     elif kind == 'burst':
 
         gs.boss_burst = {'left': bp(cfg['burst_n'], phase), 'next': now}
-
-    # -----------------------------------------------------------
-    # SUMMON: invoca abelles
-    # -----------------------------------------------------------
 
     elif kind == 'summon':
 
@@ -3166,11 +3125,9 @@ def _launch_attack(gs, kind, prog, now):
 
 
 def _update_dash(gs, now, prog):
-    """Mou el boss durant l'embestida; s'atura (esgotat) en topar amb una paret."""
 
     gs.boss_x += gs.boss_dash_dir * gs.boss_dash_speed
 
-    # pols darrere seu
     if random.random() < 0.7:
         spawn_particles(
             gs.boss_rect.centerx - gs.boss_dash_dir * (gs.boss_w // 2),
@@ -3185,7 +3142,6 @@ def _update_dash(gs, now, prog):
         gs.boss_dashing = False
         gs.boss_dir = -gs.boss_dash_dir
 
-        # esgotat: queda aturat una estona (és el moment de pegar-li)
         gs.boss_stun_until = now + 1000
         gs.boss_walking = False
         gs.boss_next_action = now + 1300
@@ -3197,7 +3153,6 @@ def _update_dash(gs, now, prog):
             gs.boss_rect.centerx, HEIGHT - 60, (255, 230, 160), 120, 400
         )
 
-        # a partir de la fase 3 la topada fa caure roques
         if gs.boss_phase >= 3:
             _launch_attack(gs, 'meteors', prog, now)
 
@@ -3214,7 +3169,6 @@ def update_boss(gs, player_hitbox):
 
     phase = gs.boss_phase
 
-    # progrés del combat: 0 = vida plena, 1 = a punt de morir
     prog = 1 - max(0, gs.boss_hp) / gs.boss_max_hp
 
     update_boss_platform_debris(gs)
@@ -3222,10 +3176,6 @@ def update_boss(gs, player_hitbox):
     in_roar = (now < gs.boss_phase_until)
 
     charging = (gs.boss_pending is not None or gs.boss_burst is not None)
-
-    # -----------------------------------------------------------
-    # PLATAFORMES ES TRENQUEN AL 75 % (si la dificultat ho té)
-    # -----------------------------------------------------------
 
     if (
         cfg['platform_damage']
@@ -3246,19 +3196,11 @@ def update_boss(gs, player_hitbox):
     ox = gs.boss_rect.centerx
     oy = gs.boss_rect.top + 70
 
-    # -----------------------------------------------------------
-    # DESPRÉS DEL RUGIT, TORNA A MOURE'S (un sol cop)
-    # -----------------------------------------------------------
-
     if gs.boss_after_roar and now >= gs.boss_phase_until and not platform_special:
 
         gs.boss_after_roar = False
         gs.boss_walking = True
         gs.boss_next_action = now + gs.boss_walk_time
-
-    # -----------------------------------------------------------
-    # MOVIMENT
-    # -----------------------------------------------------------
 
     if not platform_special:
 
@@ -3287,10 +3229,6 @@ def update_boss(gs, player_hitbox):
 
                 gs.boss_x += gs.boss_dir * speed
 
-    # -----------------------------------------------------------
-    # VORES DE LA PANTALLA
-    # -----------------------------------------------------------
-
     at_left = (gs.boss_x <= 20)
     at_right = (gs.boss_x >= WIDTH - 20 - gs.boss_w)
 
@@ -3302,8 +3240,6 @@ def update_boss(gs, player_hitbox):
     if not at_left and not at_right:
         gs.boss_edge_choice_done = False
 
-    # En arribar a una vora: gira i, de vegades, fa l'atac de les plataformes
-    # (abans, a la fase 1, el boss es quedava encallat a la paret)
     if (
         (at_left or at_right)
         and not platform_special
@@ -3329,10 +3265,6 @@ def update_boss(gs, player_hitbox):
 
     gs.boss_rect.x = int(gs.boss_x)
 
-    # -----------------------------------------------------------
-    # ATACS
-    # -----------------------------------------------------------
-
     if (
         not in_roar
         and not gs.boss_dashing
@@ -3351,7 +3283,6 @@ def update_boss(gs, player_hitbox):
 
             if kind == 'dash':
                 base = 1000
-                # s'avisa cap a quin costat embestirà
                 gs.boss_dash_dir = -1 if px < gs.boss_rect.centerx else 1
             elif kind == 'summon':
                 base = 750
@@ -3369,10 +3300,6 @@ def update_boss(gs, player_hitbox):
             cooldown = max(650, (2300 - 1100 * prog - 120 * (phase - 1)) * cfg['cooldown'])
 
             gs.boss_next_shot = now + int(cooldown)
-
-    # -----------------------------------------------------------
-    # RÀFEGA: una esfera apuntada cada 240 ms
-    # -----------------------------------------------------------
 
     b = gs.boss_burst
 
@@ -3392,10 +3319,6 @@ def update_boss(gs, player_hitbox):
 
         if b['left'] <= 0:
             gs.boss_burst = None
-
-    # -----------------------------------------------------------
-    # ESFERES
-    # -----------------------------------------------------------
 
     for shot in gs.boss_shots[:]:
 
@@ -3432,10 +3355,6 @@ def update_boss(gs, player_hitbox):
         elif player_hitbox.colliderect(shot['rect']):
             gs.alive = False
 
-    # -----------------------------------------------------------
-    # METEORS
-    # -----------------------------------------------------------
-
     for m in gs.boss_meteors[:]:
 
         if not m['falling']:
@@ -3460,10 +3379,6 @@ def update_boss(gs, player_hitbox):
         elif m['rect'].collidelist(gs.platforms) != -1:
             gs.boss_meteors.remove(m)
 
-    # -----------------------------------------------------------
-    # ONES
-    # -----------------------------------------------------------
-
     for w in gs.boss_waves[:]:
 
         w['x'] += w['vx']
@@ -3474,10 +3389,6 @@ def update_boss(gs, player_hitbox):
             gs.boss_waves.remove(w)
         elif player_hitbox.colliderect(w['rect']):
             gs.alive = False
-
-    # -----------------------------------------------------------
-    # COL·LISIÓ AMB EL BOSS (trepitjar-lo li fa mal; de costat, mors)
-    # -----------------------------------------------------------
 
     if player_hitbox.colliderect(gs.boss_rect) and now >= gs.boss_invuln_until:
 
@@ -3540,7 +3451,6 @@ def _boss_tinted(idx, d, img, phase):
 
 
 def draw_dash_warning(gs, now):
-    """Franja vermella i fletxes al terra: avisen per on embestirà."""
 
     d = gs.boss_dash_dir
 
@@ -3558,7 +3468,6 @@ def draw_dash_warning(gs, now):
 
     screen.blit(band, (x0, HEIGHT - 50 - 46))
 
-    # fletxes que avancen cap on anirà
     offset = (now // 6) % 90
 
     for x in range(x0 - 90, x1 + 90, 90):
@@ -3581,6 +3490,10 @@ def draw_boss(gs):
     now = pygame.time.get_ticks()
 
     phase = gs.boss_phase
+
+    if gs.boss_dying:
+        draw_boss_dying(gs, now)
+        return
 
     for m in gs.boss_meteors:
 
@@ -3636,7 +3549,6 @@ def draw_boss(gs):
                 screen, (255, 60, 60), shot['rect'].center, 18, 3
             )
 
-    # avís de l'embestida
     if gs.boss_pending == 'dash':
         draw_dash_warning(gs, now)
 
@@ -3658,7 +3570,6 @@ def draw_boss(gs):
 
     blit_shadow(gs.boss_rect.centerx, HEIGHT - 50, 230, 18, 100)
 
-    # resplendor de color a partir de la fase 2
     if phase >= 2:
         pulse = 0.5 + 0.5 * math.sin(now / 200)
         aura = pygame.Surface((gs.boss_w + 120, gs.boss_h + 60), pygame.SRCALPHA)
@@ -3700,7 +3611,6 @@ def draw_boss(gs):
 
         by = gs.boss_rect.bottom - bb.bottom + oy
 
-        # estela mentre embesteix
         if gs.boss_dashing:
 
             for k in (3, 2, 1):
@@ -3766,7 +3676,6 @@ def draw_boss_bar(gs):
 
     pygame.draw.rect(screen, color, (x, y, int(bar_w * vida), bar_h))
 
-    # una marca a cada canvi de fase
     for f in cfg['phase_at']:
 
         tick_x = x + int(bar_w * f)
@@ -3790,6 +3699,217 @@ def draw_boss_bar(gs):
             (WIDTH // 2 - txt.get_width() // 2 + random.randint(-4, 4),
              190 + random.randint(-4, 4))
         )
+
+
+# ===============================================================
+# DERROTA DEL BOSS (animació)
+# ===============================================================
+
+def _clamp01(x):
+    return max(0.0, min(1.0, x))
+
+
+def ease_out_bounce(x):
+    n1, d1 = 7.5625, 2.75
+
+    if x < 1 / d1:
+        return n1 * x * x
+    if x < 2 / d1:
+        x -= 1.5 / d1
+        return n1 * x * x + 0.75
+    if x < 2.5 / d1:
+        x -= 2.25 / d1
+        return n1 * x * x + 0.9375
+
+    x -= 2.625 / d1
+    return n1 * x * x + 0.984375
+
+
+def start_boss_death(gs, now):
+
+    gs.boss_dying = True
+    gs.boss_death_start = now
+    gs.boss_death_end = now + BOSS_DEATH_MS
+    gs.boss_death_next_boom = now
+    gs.boss_death_blasted = False
+
+    gs.boss_invuln_until = now + BOSS_DEATH_MS + 5000
+    gs.alive = True
+
+    gs.boss_pending = None
+    gs.boss_burst = None
+    gs.boss_dashing = False
+    gs.boss_walking = False
+    gs.boss_static_frame = 0
+
+    gs.boss_shots.clear()
+    gs.boss_meteors.clear()
+    gs.boss_waves.clear()
+    gs.attacks.clear()
+
+    if gs.boss_platform_event != "active":
+        restore_boss_platforms(gs)
+        gs.boss_platform_event = "active"
+
+    for e in gs.enemies:
+        spawn_particles(e.centerx, e.centery, WHITE, 10, speed=4, life=450, size=4, gravity=0.05)
+
+    gs.enemies.clear()
+    gs.enemy_speeds.clear()
+    gs.enemy_kind.clear()
+    gs.enemy_hp.clear()
+    gs.enemy_hp_max.clear()
+    gs.enemy_base_y.clear()
+    gs.enemy_phase.clear()
+    gs.enemy_ai.clear()
+    gs.respawning_enemies.clear()
+
+
+def update_boss_death(gs, now):
+
+    t = now - gs.boss_death_start
+
+    r = gs.boss_rect
+
+    update_boss_platform_debris(gs)
+
+    if not MUTED['on']:
+        try:
+            pygame.mixer.music.set_volume(max(0.0, 1 - t / BOSS_DEATH_MS))
+        except pygame.error:
+            pass
+
+    if t < BOSS_DEATH_BLAST:
+
+        gs.boss_shake_until = now + 80
+
+        if now >= gs.boss_death_next_boom:
+
+            x = random.randint(r.left, r.right)
+            y = random.randint(r.top, r.bottom)
+
+            color = random.choice([
+                (255, 255, 255), (255, 200, 80), (255, 90, 40), (200, 90, 255)
+            ])
+
+            spawn_ring(x, y, color, random.randint(50, 110), 450)
+            spawn_particles(x, y, color, 14, speed=6, life=600, size=5, gravity=0.12)
+            play_sfx('hit')
+
+            gs.boss_death_next_boom = now + max(70, int(330 - t * 0.09))
+
+    if t >= BOSS_DEATH_BLAST and not gs.boss_death_blasted:
+
+        gs.boss_death_blasted = True
+
+        for k, rad in enumerate((140, 260, 420)):
+            spawn_ring(r.centerx, r.centery, (255, 240, 200), rad, 700 + k * 150)
+
+        spawn_particles(
+            r.centerx, r.centery, (200, 90, 255), 60,
+            speed=10, life=1000, size=8, gravity=0.04
+        )
+        spawn_particles(
+            r.centerx, r.centery, WHITE, 40,
+            speed=7, life=800, size=5, gravity=0.05
+        )
+
+        gs.boss_shake_until = now + 500
+        play_sfx('hit')
+
+    if BOSS_DEATH_BLAST <= t < BOSS_DEATH_BLAST + 900 and random.random() < 0.8:
+
+        spawn_particles(
+            random.randint(r.left, r.right), random.randint(r.top, r.bottom),
+            (230, 200, 255), 2, speed=2.5, life=900, size=5,
+            gravity=-0.05, upward=True
+        )
+
+
+def draw_boss_dying(gs, now):
+
+    t = now - gs.boss_death_start
+
+    fade = 1.0
+
+    if t > BOSS_DEATH_BLAST:
+        fade = max(0.0, 1 - (t - BOSS_DEATH_BLAST) / 900)
+
+    if fade <= 0:
+        return
+
+    blit_shadow(gs.boss_rect.centerx, HEIGHT - 50, 20 + 210 * fade, 18, int(100 * fade))
+
+    d = 1 if gs.boss_dir > 0 else 0
+
+    img, bb = boss_frames[0][d]
+
+    img = img.copy()
+
+    if (t // 80) % 2 == 0:
+        img.fill((130, 130, 130), special_flags=pygame.BLEND_RGB_ADD)
+    else:
+        img.fill((140, 0, 0), special_flags=pygame.BLEND_RGB_ADD)
+
+    scale = 0.6 + 0.4 * fade
+
+    if fade < 1.0:
+
+        img = pygame.transform.scale(
+            img,
+            (max(1, int(img.get_width() * scale)), max(1, int(img.get_height() * scale)))
+        )
+        img.set_alpha(int(255 * fade))
+
+    shake = (4 + int(10 * _clamp01(t / BOSS_DEATH_BLAST))) if t < BOSS_DEATH_BLAST else 0
+
+    ox = random.randint(-shake, shake) if shake else 0
+    oy = random.randint(-shake, shake) if shake else 0
+
+    bx = gs.boss_rect.centerx - img.get_width() // 2 + ox
+    by = gs.boss_rect.bottom - int(bb.bottom * scale) + oy
+
+    screen.blit(img, (bx, by))
+
+
+def draw_boss_death_overlay(gs, now):
+
+    t = now - gs.boss_death_start
+
+    if 500 < t < BOSS_DEATH_MS - 700:
+
+        a = _clamp01((t - 500) / 400) * _clamp01((BOSS_DEATH_MS - 700 - t) / 300)
+
+        txt = _font(80, True).render('BOSS DERROTAT!', True, GOLD)
+        shd = _font(80, True).render('BOSS DERROTAT!', True, BLACK)
+
+        txt.set_alpha(int(255 * a))
+        shd.set_alpha(int(255 * a))
+
+        bob = int(4 * math.sin(t / 120))
+
+        x = WIDTH // 2 - txt.get_width() // 2
+
+        screen.blit(shd, (x + 4, 184 + bob))
+        screen.blit(txt, (x, 180 + bob))
+
+    flash = 1 - abs(t - BOSS_DEATH_BLAST) / 450
+
+    if flash > 0:
+
+        ov = pygame.Surface((WIDTH, HEIGHT))
+        ov.fill(WHITE)
+        ov.set_alpha(int(255 * flash))
+        screen.blit(ov, (0, 0))
+
+    fade_start = BOSS_DEATH_MS - 700
+
+    if t > fade_start:
+
+        ov = pygame.Surface((WIDTH, HEIGHT))
+        ov.fill(BLACK)
+        ov.set_alpha(int(255 * _clamp01((t - fade_start) / 700)))
+        screen.blit(ov, (0, 0))
 
 
 def apply_boss_shake(gs):
@@ -3836,13 +3956,10 @@ def menu_play_label(used_characters):
 
 
 def return_to_menu(gs, used_characters):
-
-    if len(used_characters) >= len(CHARACTERS):
-        used_characters.clear()
-        reset_progress()
-
-    gs.reset(resume_level())
-
+    """Reseteja els nivells i personatges utilitzats en tornar al menú."""
+    used_characters.clear()
+    reset_progress()
+    gs.reset(START_LEVEL)
     gs.start_time = time.time()
 
 
@@ -3996,7 +4113,6 @@ def show_difficulty(selected_index):
 
         for j, line in enumerate(cfg['desc']):
 
-            # l'última línia (el boss) va destacada
             is_boss_line = (j == len(cfg['desc']) - 1)
 
             t = _font(22 if is_boss_line else 24, is_boss_line).render(
@@ -4183,6 +4299,17 @@ def show_shop(char_index, ability_index, message, message_ok):
 # SELECCIÓ INICIAL
 # ===============================================================
 
+def get_select_card_rects():
+    n = len(CHARACTERS)
+    card_w = 240
+    card_h = 330
+    gap = 40
+    total = n * card_w + (n - 1) * gap
+    start_x = (WIDTH - total) // 2
+    card_y = 190
+    return [pygame.Rect(start_x + i * (card_w + gap), card_y, card_w, card_h) for i in range(n)]
+
+
 def show_character_select(selected, used_characters):
 
     screen.fill(C4)
@@ -4214,21 +4341,12 @@ def show_character_select(selected, used_characters):
         (WIDTH // 2 - attempts_text.get_width() // 2, 145)
     )
 
-    n = len(CHARACTERS)
-
-    card_w = 240
-    card_h = 330
-    gap = 40
-
-    total = n * card_w + (n - 1) * gap
-
-    start_x = (WIDTH - total) // 2
-
-    card_y = 190
+    rects = get_select_card_rects()
 
     for i, ch in enumerate(CHARACTERS):
 
-        x = start_x + i * (card_w + gap)
+        rect = rects[i]
+        x, card_y, card_w, card_h = rect.x, rect.y, rect.width, rect.height
 
         used = (i in used_characters)
 
@@ -4294,7 +4412,7 @@ def show_character_select(selected, used_characters):
             )
 
     help_text = small_font.render(
-        'A/D o fletxes = triar    ENTER = començar    ESC = enrere',
+        'A/D, fletxes o ratolí = triar    ENTER o clic = començar    ESC = enrere',
         True,
         WHITE
     )
@@ -4307,6 +4425,19 @@ def show_character_select(selected, used_characters):
 # ===============================================================
 # SELECCIÓ DESPRÉS DE MORIR
 # ===============================================================
+
+def get_death_select_card_rects(used_characters):
+    disponibles = [
+        i for i in range(len(CHARACTERS)) if i not in used_characters
+    ]
+    card_w = 250
+    card_h = 330
+    gap = 30
+    total = len(disponibles) * card_w + (len(disponibles) - 1) * gap
+    start_x = (WIDTH - total) // 2
+    card_y = 190
+    return [(ch_idx, pygame.Rect(start_x + pos * (card_w + gap), card_y, card_w, card_h)) for pos, ch_idx in enumerate(disponibles)]
+
 
 def show_death_character_select(selected, used_characters):
 
@@ -4346,23 +4477,13 @@ def show_death_character_select(selected, used_characters):
     if selected not in disponibles:
         selected = disponibles[0]
 
-    card_w = 250
-    card_h = 330
-    gap = 30
-
-    total = len(disponibles) * card_w + (len(disponibles) - 1) * gap
-
-    start_x = (WIDTH - total) // 2
-
-    card_y = 190
-
     now = pygame.time.get_ticks()
+    card_rects = get_death_select_card_rects(used_characters)
 
-    for pos, character_index in enumerate(disponibles):
+    for pos, (character_index, rect) in enumerate(card_rects):
 
         ch = CHARACTERS[character_index]
-
-        x = start_x + pos * (card_w + gap)
+        x, card_y, card_w, card_h = rect.x, rect.y, rect.width, rect.height
 
         is_selected = (character_index == selected)
 
@@ -4416,7 +4537,7 @@ def show_death_character_select(selected, used_characters):
         screen.blit(number, (x + 12, card_y + 10))
 
     help_text = small_font.render(
-        'A/D o fletxes = triar     ENTER = continuar     ESC = menú',
+        'A/D, fletxes o ratolí = triar     ENTER o clic = continuar     ESC = menú',
         True,
         WHITE
     )
@@ -4544,9 +4665,9 @@ def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
     font = _font(50)
 
     next_text = (
-        '1 - Lluitar contra el BOSS'
+        'ENTER - Lluitar contra el BOSS'
         if level + 1 == BOSS_LEVEL
-        else '1 - Següent Nivell'
+        else 'ENTER - Següent Nivell'
     )
 
     if best_time is None:
@@ -4564,7 +4685,7 @@ def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
             (f'Time: {time_taken:.2f} seconds', WHITE),
             record_line,
             (next_text, WHITE),
-            ('2 - Tornar al Nivell', WHITE),
+            ('ESPAI - Tornar al Nivell', WHITE),
             ('B - Botiga: millorar habilitats', GOLD),
         ],
         font,
@@ -4575,11 +4696,32 @@ def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
     pygame.display.flip()
 
 
-def show_final_screen(time_taken, best_time=None, is_record=False):
+CONFETTI_COLORS = ((255, 215, 0), (255, 90, 90), (90, 200, 255), (120, 255, 140), (255, 140, 255))
 
-    screen.fill(BLACK)
 
-    font = _font(50)
+def show_final_screen(time_taken, best_time=None, is_record=False, t=9999):
+
+    screen.fill((8, 8, 25))
+
+    if random.random() < 0.8:
+        spawn_particles(
+            random.randint(0, WIDTH), -10, random.choice(CONFETTI_COLORS), 1,
+            speed=2.5, life=3500, size=5, gravity=0.05
+        )
+
+    update_particles()
+    draw_particles()
+
+    sc = max(0.05, ease_out_bounce(_clamp01(t / 900)))
+
+    title = _font(90, True).render('HAS GUANYAT!', True, GOLD)
+
+    title = pygame.transform.smoothscale(
+        title,
+        (max(1, int(title.get_width() * sc)), max(1, int(title.get_height() * sc)))
+    )
+
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 150 - title.get_height() // 2))
 
     if best_time is None:
         record_line = ('', WHITE)
@@ -4588,19 +4730,126 @@ def show_final_screen(time_taken, best_time=None, is_record=False):
     else:
         record_line = (f'Rècord: {best_time:.2f} s', (200, 200, 200))
 
-    draw_centered_lines(
-        [
-            ('HAS GUANYAT!', GOLD),
-            ('Has derrotat el boss final', WHITE),
-            (f'Time: {time_taken:.2f} seconds', WHITE),
-            record_line,
-            ('2 - Tornar a lluitar contra el boss', WHITE),
-            ('ESC - Menu', WHITE),
-        ],
-        font,
-        HEIGHT // 5,
-        70
-    )
+    lines = [
+        ('Has derrotat el boss final', WHITE),
+        (f'Time: {time_taken:.2f} seconds', WHITE),
+        record_line,
+        ('ESPAI - Tornar a lluitar contra el boss', WHITE),
+        ('ESC - Menu', WHITE),
+    ]
+
+    for i, (text, color) in enumerate(lines):
+
+        surf = _font(44).render(text, True, color)
+
+        surf.set_alpha(int(255 * _clamp01((t - 700 - i * 200) / 300)))
+
+        screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, 260 + i * 62))
+
+    pygame.display.flip()
+
+
+def show_game_over(bg, t, info):
+
+    screen.blit(bg, (0, 0))
+
+    red = pygame.Surface((WIDTH, HEIGHT))
+    red.fill((90, 0, 0))
+    red.set_alpha(int(110 * min(1.0, t / 900)))
+    screen.blit(red, (0, 0))
+
+    if random.random() < 0.6:
+        spawn_particles(
+            random.randint(0, WIDTH), HEIGHT + 5,
+            random.choice(((255, 100, 40), (210, 70, 30), (160, 160, 160))), 1,
+            speed=3.0, life=3000, size=4, gravity=0.0, upward=True
+        )
+
+    update_particles()
+    draw_particles()
+
+    e = ease_out_bounce(_clamp01((t - 150) / 850))
+
+    ty = int(-170 + 270 * e)
+
+    sx = sy = 0
+
+    if 440 <= t < 840:
+        k = 1 - (t - 440) / 400
+        sx = int(random.randint(-8, 8) * k)
+        sy = int(random.randint(-6, 6) * k)
+
+    pulse = 0.5 + 0.5 * math.sin(t / 220)
+
+    title = _font(110, True).render('GAME OVER', True, (200 + int(55 * pulse), 25, 25))
+    shadow = _font(110, True).render('GAME OVER', True, (20, 0, 0))
+
+    tx = WIDTH // 2 - title.get_width() // 2 + sx
+
+    screen.blit(shadow, (tx + 6, ty + 6 + sy))
+    screen.blit(title, (tx, ty + sy))
+
+    sub = _font(30).render('Tots els personatges han caigut...', True, (230, 200, 200))
+    sub.set_alpha(int(255 * _clamp01((t - 1000) / 400)))
+    screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 270))
+
+    n = len(CHARACTERS)
+    size = 96
+    gap = 34
+
+    x0 = (WIDTH - (n * size + (n - 1) * gap)) // 2
+
+    for i in range(n):
+
+        a = _clamp01((t - (1150 + i * 300)) / 300)
+
+        if a <= 0:
+            continue
+
+        fx = x0 + i * (size + gap)
+        fy = 330 + int((1 - a) * 30)
+
+        face = get_face(i, size, True).copy()
+        face.set_alpha(int(255 * a))
+        screen.blit(face, (fx, fy))
+
+        nm = _font(22, True).render(CHARACTERS[i].nom, True, (190, 190, 190))
+        nm.set_alpha(int(255 * a))
+        screen.blit(nm, (fx + size // 2 - nm.get_width() // 2, fy + size + 6))
+
+    where = 'el BOSS FINAL' if info['boss'] else f"el nivell {info['level']}"
+
+    lines = [(f'Has caigut a {where}', WHITE)]
+
+    if info['boss']:
+        lines.append((f"Vida que li quedava al boss: {info['boss_pct']} %", (255, 140, 140)))
+    else:
+        lines.append((f"Poké Balls d'aquest nivell: {info['balls'][0]}/{info['balls'][1]}", WHITE))
+
+    lines.append((f"Punts: {SAVE['points']}", GOLD))
+
+    if SAVE['points'] > 0:
+        lines.append(("Gasta'ls a la botiga i torna-ho a provar!", (255, 230, 150)))
+
+    for k, (text, color) in enumerate(lines):
+
+        surf = _font(30).render(text, True, color)
+
+        surf.set_alpha(int(255 * _clamp01((t - 1700 - k * 250) / 300)))
+
+        screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, 465 + k * 40))
+
+    if t >= GO_INPUT_MS:
+
+        a = _clamp01((t - GO_INPUT_MS) / 300) * (0.65 + 0.35 * math.sin(t / 260))
+
+        hint = _font(28, True).render(
+            'ENTER = tornar-ho a provar     B = botiga     ESC = menú', True, YELLOW
+        )
+
+        hint.set_alpha(int(255 * a))
+
+        screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 60))
 
     pygame.display.flip()
 
@@ -4775,6 +5024,14 @@ async def game():
     shop_msg_ok = True
     shop_msg_until = 0
 
+    final_start = 0
+
+    go_bg = None
+    go_start = 0
+    go_info = {}
+
+    shop_return = 'menu'
+
     while running:
 
         await asyncio.sleep(0)
@@ -4896,6 +5153,7 @@ async def game():
                         confirm = True
 
                     elif event.key == pygame.K_ESCAPE:
+                        return_to_menu(gs, used_characters)
                         game_state = 'menu'
 
                     for num_key, idx in (
@@ -4965,7 +5223,10 @@ async def game():
 
                     elif event.key == pygame.K_ESCAPE:
 
-                        game_state = 'menu'
+                        if shop_return == 'menu':
+                            return_to_menu(gs, used_characters)
+                        game_state = shop_return
+                        shop_return = 'menu'
 
         # =====================================================
         # SELECCIÓ
@@ -4994,6 +5255,31 @@ async def game():
 
                 if event.type == pygame.QUIT:
                     running = False
+
+                # Selecció amb moviment de ratolí
+                if event.type == pygame.MOUSEMOTION:
+                    for i, rect in enumerate(get_select_card_rects()):
+                        if rect.collidepoint(event.pos) and i not in used_characters:
+                            selected = i
+
+                # Selecció amb clic de ratolí
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    for i, rect in enumerate(get_select_card_rects()):
+                        if rect.collidepoint(event.pos) and i not in used_characters:
+                            selected = i
+                            player_char = CHARACTERS[selected]
+                            ACTIVE['nom'] = player_char.nom
+                            sprite_index = 0
+                            last_change_frame_time = current_time
+
+                            await fade_out()
+                            game_state = 'playing'
+                            gs.reset(gs.level)
+                            gs.start_time = time.time()
+                            prev_on_ground = True
+                            start_fade_in()
+                            play_music('assets/musica1.mp3')
+                            break
 
                 if event.type == pygame.KEYDOWN:
 
@@ -5043,6 +5329,7 @@ async def game():
 
                     if event.key == pygame.K_ESCAPE:
 
+                        return_to_menu(gs, used_characters)
                         game_state = 'menu'
 
         # =====================================================
@@ -5057,15 +5344,10 @@ async def game():
 
             if not disponibles:
 
-                used_characters.clear()
-                reset_progress()
-
                 selected = 0
                 death_selected = 0
 
-                gs.reset(START_LEVEL)
-
-                gs.start_time = time.time()
+                return_to_menu(gs, used_characters)
 
                 game_state = 'menu'
 
@@ -5082,6 +5364,31 @@ async def game():
 
                 if event.type == pygame.QUIT:
                     running = False
+
+                # Selecció amb el ratolí després de morir
+                if event.type == pygame.MOUSEMOTION:
+                    for ch_idx, rect in get_death_select_card_rects(used_characters):
+                        if rect.collidepoint(event.pos):
+                            death_selected = ch_idx
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    for ch_idx, rect in get_death_select_card_rects(used_characters):
+                        if rect.collidepoint(event.pos):
+                            death_selected = ch_idx
+                            selected = death_selected
+                            player_char = CHARACTERS[selected]
+                            ACTIVE['nom'] = player_char.nom
+                            sprite_index = 0
+                            last_change_frame_time = pygame.time.get_ticks()
+
+                            await fade_out()
+                            gs.reset(gs.level, keep_boss_hp=True)
+                            gs.start_time = time.time()
+                            game_state = 'playing'
+                            prev_on_ground = True
+                            start_fade_in()
+                            play_music('assets/musica1.mp3')
+                            break
 
                 if event.type == pygame.KEYDOWN:
 
@@ -5150,9 +5457,8 @@ async def game():
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
 
+                    return_to_menu(gs, used_characters)
                     game_state = 'menu'
-
-                    gs.start_time = time.time()
 
         # =====================================================
         # AJUDA
@@ -5169,9 +5475,61 @@ async def game():
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
 
+                    return_to_menu(gs, used_characters)
                     game_state = 'menu'
 
-                    gs.start_time = time.time()
+        # =====================================================
+        # GAME OVER (han mort tots els personatges)
+        # =====================================================
+
+        elif game_state == 'gameover':
+
+            go_t = current_time - go_start
+
+            show_game_over(go_bg, go_t, go_info)
+
+            for event in pygame.event.get():
+
+                if event.type == pygame.QUIT:
+                    running = False
+
+                if event.type == pygame.KEYDOWN and go_t >= GO_INPUT_MS:
+
+                    if event.key == pygame.K_RETURN:
+
+                        reset_progress()
+                        used_characters.clear()
+
+                        selected = 0
+                        death_selected = 0
+
+                        gs.reset(START_LEVEL)
+                        gs.start_time = time.time()
+
+                        play_music('assets/musica2.mp3')
+
+                        game_state = 'select'
+
+                    elif event.key == pygame.K_b:
+
+                        shop_char = 0
+                        shop_ability = 0
+                        shop_msg = ''
+
+                        shop_return = 'gameover'
+
+                        game_state = 'shop'
+
+                    elif event.key == pygame.K_ESCAPE:
+
+                        selected = 0
+                        death_selected = 0
+
+                        return_to_menu(gs, used_characters)
+
+                        play_music('assets/musica2.mp3')
+
+                        game_state = 'menu'
 
         # =====================================================
         # FINAL
@@ -5179,7 +5537,10 @@ async def game():
 
         elif game_state == 'final':
 
-            show_final_screen(final_time, final_best, final_is_record)
+            show_final_screen(
+                final_time, final_best, final_is_record,
+                pygame.time.get_ticks() - final_start
+            )
 
             for event in pygame.event.get():
 
@@ -5188,7 +5549,8 @@ async def game():
 
                 if event.type == pygame.KEYDOWN:
 
-                    if event.key == pygame.K_2:
+                    # Tornar a intentar amb l'Espai
+                    if event.key == pygame.K_SPACE:
 
                         gs.reset(BOSS_LEVEL)
 
@@ -5204,12 +5566,7 @@ async def game():
 
                     if event.key == pygame.K_ESCAPE:
 
-                        used_characters.clear()
-                        reset_progress()
-
-                        gs.reset(START_LEVEL)
-
-                        gs.start_time = time.time()
+                        return_to_menu(gs, used_characters)
 
                         game_state = 'menu'
 
@@ -5581,20 +5938,36 @@ async def game():
 
                 if gs.is_boss:
 
-                    if gs.alive:
-                        update_boss(gs, player_hitbox)
+                    if gs.boss_dying:
 
-                    if gs.boss_dead:
+                        update_boss_death(gs, pygame.time.get_ticks())
 
-                        final_time = time.time() - gs.start_time
+                        if pygame.time.get_ticks() >= gs.boss_death_end:
 
-                        final_is_record, final_best = submit_record(
-                            record_key('boss'), final_time
-                        )
+                            game_state = 'final'
+                            final_start = pygame.time.get_ticks()
 
-                        game_state = 'final'
+                            particles.clear()
+                            rings.clear()
+                            popups.clear()
 
-                        play_music('assets/musica2.mp3')
+                            apply_volume()
+                            play_music('assets/musica2.mp3')
+
+                    else:
+
+                        if gs.alive:
+                            update_boss(gs, player_hitbox)
+
+                        if gs.boss_dead:
+
+                            final_time = time.time() - gs.start_time
+
+                            final_is_record, final_best = submit_record(
+                                record_key('boss'), final_time
+                            )
+
+                            start_boss_death(gs, pygame.time.get_ticks())
 
                 if not gs.pokeballs and not gs.is_boss:
 
@@ -5700,7 +6073,8 @@ async def game():
                                 shop_ability = 0
                                 shop_msg = ''
 
-                            if event.key == pygame.K_1:
+                            # Següent nivell ara amb ENTER
+                            if event.key == pygame.K_RETURN:
 
                                 gs.reset(gs.level + 1)
 
@@ -5714,7 +6088,8 @@ async def game():
 
                                 music_replay()
 
-                            if event.key == pygame.K_2:
+                            # Reintentar mateix nivell ara amb ESPAI
+                            if event.key == pygame.K_SPACE:
 
                                 gs.reset(gs.level)
 
@@ -5884,7 +6259,7 @@ async def game():
                 gs.platforms
             )
 
-            if not (
+            if gs.alive and not (
                 current_time < gs.player_invuln_until
                 and (current_time // 100) % 2 == 0
             ):
@@ -5909,9 +6284,9 @@ async def game():
 
             font = _font(30)
 
-            time_text = font.render(
-                f'Time: {time.time() - gs.start_time:.2f}s', True, WHITE
-            )
+            shown_time = final_time if gs.boss_dying else time.time() - gs.start_time
+
+            time_text = font.render(f'Time: {shown_time:.2f}s', True, WHITE)
 
             pokeball_text = font.render(
                 f'Poké Balls: {gs.collected_pokeballs}/{gs.total_pokeballs}',
@@ -6046,9 +6421,15 @@ async def game():
                         (WIDTH // 2 - hint.get_width() // 2, 110)
                     )
 
+            # =====================================================
+            # MORT
+            # =====================================================
+
             if not gs.alive:
 
                 used_characters.add(selected)
+
+                all_dead = len(used_characters) >= len(CHARACTERS)
 
                 if not gs.death_fx:
 
@@ -6066,77 +6447,90 @@ async def game():
                         WHITE, 14, speed=5, life=500, size=4, gravity=0.1
                     )
 
-                death_text1 = font.render('GAME OVER', True, RED)
-
-                death_text2 = font.render(
-                    'Prem ENTER per escollir un altre personatge', True, RED
-                )
-
-                death_text3 = font.render(
-                    'Prem ESC per tornar al menú', True, RED
-                )
-
-                screen.blit(
-                    death_text1,
-                    (WIDTH // 2 - death_text1.get_width() // 2, int(HEIGHT // 2.3))
-                )
-
-                screen.blit(
-                    death_text2,
-                    (WIDTH // 2 - death_text2.get_width() // 2, HEIGHT // 2)
-                )
-
-                screen.blit(
-                    death_text3,
-                    (WIDTH // 2 - death_text3.get_width() // 2, int(HEIGHT // 1.7))
-                )
-
                 if not gs.death_music_played:
 
                     play_music('assets/musica_mort.mp3')
 
                     gs.death_music_played = True
 
-                disponibles = [
-                    i for i in range(len(CHARACTERS)) if i not in used_characters
-                ]
+                if all_dead:
 
-                if keys[pygame.K_RETURN]:
+                    if gs.game_over_at == 0:
+                        gs.game_over_at = current_time + 1300
 
-                    if disponibles:
+                    fade_k = _clamp01(1 - (gs.game_over_at - current_time) / 1300)
+
+                    dark = pygame.Surface((WIDTH, HEIGHT))
+                    dark.fill(BLACK)
+                    dark.set_alpha(int(140 * fade_k))
+                    screen.blit(dark, (0, 0))
+
+                    if current_time >= gs.game_over_at:
+
+                        go_bg = _to_gray(screen.copy())
+                        go_start = current_time
+
+                        go_info = {
+                            'level': gs.level,
+                            'boss': gs.is_boss,
+                            'balls': (gs.collected_pokeballs, gs.total_pokeballs),
+                            'boss_pct': int(100 * max(0, gs.boss_hp) / gs.boss_max_hp),
+                        }
+
+                        game_state = 'gameover'
+
+                else:
+
+                    death_text1 = font.render('GAME OVER', True, RED)
+
+                    death_text2 = font.render(
+                        'Prem ENTER per escollir un altre personatge', True, RED
+                    )
+
+                    death_text3 = font.render(
+                        'Prem ESC per tornar al menú', True, RED
+                    )
+
+                    screen.blit(
+                        death_text1,
+                        (WIDTH // 2 - death_text1.get_width() // 2, int(HEIGHT // 2.3))
+                    )
+
+                    screen.blit(
+                        death_text2,
+                        (WIDTH // 2 - death_text2.get_width() // 2, HEIGHT // 2)
+                    )
+
+                    screen.blit(
+                        death_text3,
+                        (WIDTH // 2 - death_text3.get_width() // 2, int(HEIGHT // 1.7))
+                    )
+
+                    disponibles = [
+                        i for i in range(len(CHARACTERS)) if i not in used_characters
+                    ]
+
+                    if keys[pygame.K_RETURN]:
 
                         death_selected = disponibles[0]
 
                         game_state = 'death_select'
 
-                    else:
-
-                        used_characters.clear()
-                        reset_progress()
+                    if keys[pygame.K_ESCAPE]:
 
                         selected = 0
                         death_selected = 0
 
-                        gs.reset(START_LEVEL)
-
-                        gs.start_time = time.time()
+                        return_to_menu(gs, used_characters)
 
                         game_state = 'menu'
 
                         play_music('assets/musica2.mp3')
 
-                if keys[pygame.K_ESCAPE]:
-
-                    selected = 0
-                    death_selected = 0
-
-                    return_to_menu(gs, used_characters)
-
-                    game_state = 'menu'
-
-                    play_music('assets/musica2.mp3')
-
             apply_boss_shake(gs)
+
+            if gs.is_boss and gs.boss_dying:
+                draw_boss_death_overlay(gs, pygame.time.get_ticks())
 
             draw_fade_in()
 
