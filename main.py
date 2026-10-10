@@ -203,7 +203,7 @@ DIFFICULTY_SETTINGS = {
     'facil': {
         'nom': 'FÀCIL', 'color': (80, 220, 100),
         'desc': ["La meitat d'enemics", 'Vida al 50 %', 'Velocitat al 60 %',
-                 'Llop amb 1 de vida'],
+                 'Llop amb 1 de vida', 'Boss: 2 fases, atacs suaus'],
         'mode': 'frac', 'keep': 0.5,
         'speed': 0.6, 'hp': 0.5, 'wolf_hp': 1,
         'chase': False, 'wolf_chase': False, 'ground_enemy': True,
@@ -212,7 +212,7 @@ DIFFICULTY_SETTINGS = {
     'normal': {
         'nom': 'NORMAL', 'color': (255, 220, 60),
         'desc': ['2 enemics menys', 'No et persegueixen', 'Vida normal',
-                 'Velocitat al 80 %'],
+                 'Velocitat al 80 %', 'Boss: 3 fases i embestides'],
         'mode': 'minus', 'remove': 2,
         'speed': 0.8, 'hp': 1.0, 'wolf_hp': None,
         'chase': False, 'wolf_chase': False, 'ground_enemy': True,
@@ -221,7 +221,8 @@ DIFFICULTY_SETTINGS = {
     'dificil': {
         'nom': 'DIFÍCIL', 'color': (255, 80, 80),
         'desc': ['Tots els enemics', 'Velocitat màxima',
-                 'Perseguidors i llop', 'Com el joc original'],
+                 'Perseguidors i llop', 'Com el joc original',
+                 'Boss: 4 fases, invoca i ràfegues'],
         'mode': 'all',
         'speed': 1.0, 'hp': 1.0, 'wolf_hp': None,
         'chase': True, 'wolf_chase': True, 'ground_enemy': True,
@@ -260,6 +261,113 @@ def record_key(base):
         return str(base)
 
     return f"{base}_{DIFFICULTY['key']}"
+
+
+# ---------------------------------------------------------------
+# [NOU9] BOSS FINAL: CONFIGURACIÓ PER DIFICULTAT
+#
+#   phase_at         -> fraccions de vida on el boss canvia de fase
+#                       (1 valor = 2 fases, 2 = 3 fases, 3 = 4 fases)
+#   invuln_ms        -> temps que és invulnerable després de rebre un cop
+#   windup / cooldown-> multiplicadors de l'avís i de l'espera entre atacs
+#   proj / walk      -> multiplicadors de velocitat de projectils i del boss
+#   platform_damage  -> les plataformes es trenquen al 75 % de vida
+#   platform_attack  -> probabilitat que, a les vores, faci l'atac de
+#                       "plataformes fora" (a partir de la fase 2)
+#   attacks          -> atacs possibles (amb pes) a cada fase
+#   fan_n, meteor_n, wave_speed, homing_n, burst_n, summon_n
+#                    -> llista amb un valor per fase (o un sol número)
+#   dash_speed       -> velocitat de l'embestida (0 = no n'hi ha)
+#
+# Atacs nous: 'dash' (embestida pel terra), 'burst' (ràfega
+# apuntada) i 'summon' (invoca abelles).
+# ---------------------------------------------------------------
+
+BOSS_SETTINGS = {
+    'facil': {
+        'phase_at': [0.5],
+        'invuln_ms': 1100,
+        'windup': 1.4, 'cooldown': 1.4, 'proj': 0.8, 'walk': 0.8,
+        'platform_damage': False, 'platform_attack': 0.0,
+        'attacks': {
+            1: {'orb': 3, 'fan': 2, 'wave': 2},
+            2: {'orb': 2, 'fan': 2, 'wave': 2, 'meteors': 2},
+        },
+        'fan_n': [3, 4],
+        'meteor_n': [3, 4], 'meteor_warn': 1200,
+        'wave_speed': [5, 6],
+        'homing_n': 0, 'burst_n': 0, 'summon_n': 0,
+        'dash_speed': 0,
+    },
+    'normal': {
+        'phase_at': [0.66, 0.33],
+        'invuln_ms': 1400,
+        'windup': 1.0, 'cooldown': 1.0, 'proj': 1.0, 'walk': 1.0,
+        'platform_damage': True, 'platform_attack': 0.33,
+        'attacks': {
+            1: {'orb': 3, 'fan': 2, 'meteors': 1, 'wave': 2},
+            2: {'orb': 1, 'fan': 2, 'meteors': 2, 'wave': 2, 'dash': 2, 'homing': 1},
+            3: {'fan': 2, 'meteors': 2, 'wave': 2, 'dash': 2, 'homing': 2, 'burst': 2},
+        },
+        'fan_n': [3, 5, 7],
+        'meteor_n': [4, 6, 8], 'meteor_warn': 900,
+        'wave_speed': [6, 7, 8],
+        'homing_n': [1, 1, 2], 'burst_n': [3, 3, 4], 'summon_n': 0,
+        'dash_speed': 11,
+    },
+    'dificil': {
+        'phase_at': [0.75, 0.5, 0.25],
+        'invuln_ms': 1600,
+        'windup': 0.8, 'cooldown': 0.75, 'proj': 1.2, 'walk': 1.15,
+        'platform_damage': True, 'platform_attack': 0.5,
+        'attacks': {
+            1: {'orb': 3, 'fan': 2, 'meteors': 1, 'wave': 2, 'dash': 1},
+            2: {'orb': 1, 'fan': 2, 'meteors': 2, 'wave': 2, 'dash': 2,
+                'homing': 1, 'burst': 1, 'summon': 1},
+            3: {'fan': 2, 'meteors': 2, 'wave': 2, 'dash': 2,
+                'homing': 2, 'burst': 2, 'summon': 1},
+            4: {'fan': 2, 'meteors': 3, 'wave': 2, 'dash': 2,
+                'homing': 2, 'burst': 3, 'summon': 1},
+        },
+        'fan_n': [5, 6, 8, 10],
+        'meteor_n': [5, 7, 9, 12], 'meteor_warn': 700,
+        'wave_speed': [7, 8, 9, 10],
+        'homing_n': [1, 1, 2, 3], 'burst_n': [3, 4, 5, 6], 'summon_n': [2, 2, 2, 3],
+        'dash_speed': 14,
+    },
+}
+
+# Aspecte de cada fase (1 = normal, sense color)
+BOSS_PHASE_COLORS = {1: (230, 40, 60), 2: (255, 110, 0), 3: (255, 60, 160), 4: (190, 80, 255)}
+BOSS_PHASE_TINT = {2: (70, 0, 0), 3: (100, 0, 40), 4: (110, 0, 90)}
+BOSS_PHASE_AURA = {2: (255, 60, 20), 3: (255, 40, 130), 4: (180, 60, 255)}
+BOSS_PHASE_TEXT = {2: 'ENFURISMAT!', 3: 'FÚRIA!', 4: 'FÚRIA TOTAL!'}
+
+
+def boss_cfg():
+    """Configuració del boss segons la dificultat activa."""
+    return BOSS_SETTINGS[DIFFICULTY['key']]
+
+
+def bp(values, phase):
+    """Valor d'una llista per fase (o el número tal qual)."""
+
+    if isinstance(values, (list, tuple)):
+        return values[min(phase, len(values)) - 1]
+
+    return values
+
+
+def boss_phase_for_hp(gs, hp):
+    """Fase del boss que li correspon a aquesta vida."""
+
+    phase = 1
+
+    for threshold in gs.boss_phase_hp:
+        if hp <= threshold:
+            phase += 1
+
+    return phase
 
 
 ATTACK_COLORS = {
@@ -338,7 +446,7 @@ BOSS_PLATFORM_SPECIAL_MAX = 7000
 
 BOSS_PLATFORM_RETURN_WARNING = 2000
 
-BOSS_PHASE2_ROAR_TIME = 1600
+BOSS_PHASE2_ROAR_TIME = 1600      # durada del rugit en canviar de fase
 
 BOSS_SCALE = 4
 BOSS_FRAMES = 4
@@ -1042,13 +1150,16 @@ class GameState:
         self.total_pokeballs = len(self.pokeballs)
 
         # -------------------------------------------------------
-        # BOSS VIDA AJUSTADA SEGONS DIFICULTAT
+        # BOSS: VIDA I FASES SEGONS DIFICULTAT
         # -------------------------------------------------------
 
         mult = diff().get('boss_hp_mult', 1.0)
-        self.boss_max_hp = round(BOSS_BASE_HP * mult)
+        self.boss_max_hp = max(1, round(BOSS_BASE_HP * mult))
         self.boss_hp = self.boss_max_hp
-        self.boss_phase2_hp = self.boss_max_hp / 2
+
+        # vida a la qual comença cada fase nova (de més a menys)
+        self.boss_phase_hp = [self.boss_max_hp * f for f in boss_cfg()['phase_at']]
+
         self.boss_platform_damage_hp = self.boss_max_hp * 0.75
 
         self.boss_w = 290
@@ -1291,7 +1402,6 @@ class GameState:
             level = self.level
 
         old_boss_hp = self.boss_hp
-        old_boss_phase = getattr(self, 'boss_phase', 1)
         old_platforms_deteriorated = getattr(
             self, 'boss_platforms_deteriorated', False
         )
@@ -1300,19 +1410,21 @@ class GameState:
 
         if keep_boss_hp and level == BOSS_LEVEL:
 
-            self.boss_hp = old_boss_hp
-            self.boss_hp = max(0, min(self.boss_hp, self.boss_max_hp))
+            self.boss_hp = max(0, min(old_boss_hp, self.boss_max_hp))
 
             self.boss_hp_ghost = float(self.boss_hp)
 
-            if old_boss_phase == 2 or self.boss_hp <= self.boss_phase2_hp:
-                self.boss_phase = 2
-            else:
-                self.boss_phase = 1
+            # el boss reapareix a la fase que li toca per la seva vida
+            self.boss_phase = boss_phase_for_hp(self, self.boss_hp)
+
+            boss_phase_timing(self)
 
             if (
                 old_platforms_deteriorated
-                or self.boss_hp <= self.boss_platform_damage_hp
+                or (
+                    boss_cfg()['platform_damage']
+                    and self.boss_hp <= self.boss_platform_damage_hp
+                )
             ):
                 deteriorate_boss_platforms(self)
 
@@ -2198,7 +2310,6 @@ def hit_enemy(gs, i, dmg, color):
         )
         play_sfx('hit')
 
-        d = gs.enemy_ai.get(id(e), {})
         kind = gs.enemy_kind[i]
         facing_flip = (gs.enemy_speeds[i] < 0)
 
@@ -2217,8 +2328,9 @@ def hit_enemy(gs, i, dmg, color):
             'h': e.height
         })
 
-        # Si és un enemic volador, programa la seva reaparició en 7 segons (7000 ms)
-        if kind != GROUND_ENEMY_KIND:
+        # Els voladors normals reapareixen als 7 s. Les abelles que invoca
+        # el boss NO reapareixen (només les invoca ell).
+        if kind != GROUND_ENEMY_KIND and not gs.is_boss:
             now = pygame.time.get_ticks()
             gs.respawning_enemies.append({
                 'respawn_at': now + 7000,
@@ -2243,7 +2355,7 @@ def damage_boss(gs, now):
     dmg = getattr(gs, 'boss_damage', 1)
 
     gs.boss_hp -= dmg
-    gs.boss_invuln_until = now + 1500
+    gs.boss_invuln_until = now + boss_cfg()['invuln_ms']
     gs.boss_flash_until = now + 250
 
     spawn_particles(
@@ -2255,8 +2367,8 @@ def damage_boss(gs, now):
 
     if gs.boss_hp <= 0:
         gs.boss_dead = True
-    elif gs.boss_phase == 1 and gs.boss_hp <= gs.boss_phase2_hp:
-        _enter_phase2(gs, now)
+    else:
+        check_boss_phase(gs, now)
 
 
 def update_attacks(gs, now):
@@ -2496,6 +2608,7 @@ def init_boss_extras(gs):
 
     gs.boss_phase_until = 0
     gs.boss_shake_until = 0
+    gs.boss_after_roar = False
 
     gs.boss_pending = None
     gs.boss_windup_until = 0
@@ -2503,6 +2616,13 @@ def init_boss_extras(gs):
 
     gs.boss_meteors = []
     gs.boss_waves = []
+
+    # embestida, ràfega i temps d'esgotament després de l'embestida
+    gs.boss_dashing = False
+    gs.boss_dash_dir = 1
+    gs.boss_dash_speed = 0
+    gs.boss_burst = None
+    gs.boss_stun_until = 0
 
     gs.boss_static_frame = 0
 
@@ -2529,14 +2649,24 @@ def _new_shot(gs, x, y, vx, vy, homing_until=0, speed=0.0):
     })
 
 
-def _choose_attack(gs):
+def _choose_attack(gs, allow_dash=True):
+    """Tria el següent atac segons la fase i la dificultat."""
 
-    if gs.boss_phase == 1:
-        pool = {'orb': 3, 'fan': 2, 'meteors': 1, 'wave': 2}
-    else:
-        pool = {'orb': 1, 'fan': 2, 'meteors': 2, 'wave': 2, 'homing': 2}
+    attacks = boss_cfg()['attacks']
+
+    pool = dict(attacks[min(gs.boss_phase, max(attacks))])
 
     pool.pop(gs.boss_last_attack, None)
+
+    # no embesteix si les plataformes estan fora, ni invoca si ja hi ha prou abelles
+    if not allow_dash:
+        pool.pop('dash', None)
+
+    if len(gs.enemies) >= 3:
+        pool.pop('summon', None)
+
+    if not pool:
+        pool = {'orb': 1}
 
     names = list(pool)
 
@@ -2547,7 +2677,7 @@ _BOSS_TIMERS = (
     'boss_next_action', 'boss_invuln_until', 'boss_next_shot',
     'boss_phase_until', 'boss_shake_until', 'boss_windup_until',
     'boss_platform_event_until', 'boss_platform_roar_until',
-    'boss_flash_until',
+    'boss_flash_until', 'boss_stun_until',
     'player_invuln_until', 'attack_ready_at', 'special_ready_at',
     'last_pickup_at', 'switch_ready_at'
 )
@@ -2566,6 +2696,9 @@ def shift_boss_timers(gs, dt):
     for s in gs.boss_shots:
         if s['homing_until'] > 0:
             s['homing_until'] += dt
+
+    if gs.boss_burst:
+        gs.boss_burst['next'] += dt
 
     for r in gs.respawning_enemies:
         r['respawn_at'] += dt
@@ -2791,37 +2924,96 @@ def update_boss_platform_attack(gs, now):
 
 
 # ===============================================================
-# FASE 2
+# FASES DEL BOSS
 # ===============================================================
 
-def _enter_phase2(gs, now):
+def boss_phase_timing(gs):
+    """Camina més estona i para menys com més avançada és la fase."""
 
-    gs.boss_phase = 2
+    gs.boss_walk_time = 800 + 250 * (gs.boss_phase - 1)
+    gs.boss_stop_time = max(150, 400 - 80 * (gs.boss_phase - 1))
+
+
+def _enter_phase(gs, phase, now):
+    """Canvi de fase: rugit, tremolor, i s'esborren els atacs en curs."""
+
+    gs.boss_phase = phase
 
     gs.boss_shots.clear()
     gs.boss_meteors.clear()
     gs.boss_waves.clear()
 
+    gs.boss_burst = None
+    gs.boss_dashing = False
+    gs.boss_pending = None
+    gs.boss_stun_until = 0
+
     gs.boss_phase_until = now + BOSS_PHASE2_ROAR_TIME
     gs.boss_shake_until = now + BOSS_PHASE2_ROAR_TIME
+    gs.boss_invuln_until = max(gs.boss_invuln_until, now + BOSS_PHASE2_ROAR_TIME)
 
     gs.boss_walking = False
     gs.boss_static_frame = 0
-    gs.boss_pending = None
+    gs.boss_after_roar = True
 
     gs.boss_next_shot = now + BOSS_PHASE2_ROAR_TIME + 800
 
-    gs.boss_walk_time = 1100
-    gs.boss_stop_time = 250
+    boss_phase_timing(gs)
+
+    color = BOSS_PHASE_AURA.get(phase, (255, 60, 20))
+
+    spawn_ring(gs.boss_rect.centerx, gs.boss_rect.centery, color, 260, 700)
+    spawn_particles(
+        gs.boss_rect.centerx, gs.boss_rect.centery, color, 40,
+        speed=8, life=800, size=7, gravity=0.05
+    )
+
+
+def check_boss_phase(gs, now):
+    """Si la vida ja correspon a una fase més avançada, hi entra."""
+
+    target = boss_phase_for_hp(gs, gs.boss_hp)
+
+    if target > gs.boss_phase:
+        _enter_phase(gs, target, now)
 
 
 # ===============================================================
 # ATACS DEL BOSS
 # ===============================================================
 
-def _launch_attack(gs, kind, rage, now):
+def _summon_minions(gs, n, now):
+    """Invoca n abelles (1 de vida, només es poden trepitjar o matar)."""
 
-    fase2 = (gs.boss_phase == 2)
+    w, h = enemy_hitbox_size(0)
+
+    for i in range(n):
+
+        side = i % 2
+
+        x = 30 if side == 0 else WIDTH - 30 - w
+        y = random.randint(130, 260)
+
+        rect = pygame.Rect(x, y, w, h)
+
+        gs._add_enemy(rect, 0, 'sine')
+
+        gs.enemy_ai[id(rect)]['dir'] = 1 if side == 0 else -1
+
+        gs.enemy_hp[-1] = 1
+        gs.enemy_hp_max[-1] = 1
+
+        spawn_ring(rect.centerx, rect.centery, (255, 220, 80), 50, 350)
+
+
+def _launch_attack(gs, kind, prog, now):
+    """prog = progrés del combat (0 = vida plena, 1 = a punt de morir)."""
+
+    cfg = boss_cfg()
+
+    phase = gs.boss_phase
+
+    pm = cfg['proj']
 
     px = gs.player_x + PLAYER_SIZE[0] // 2
     py = gs.player_y + PLAYER_SIZE[1] // 2
@@ -2829,65 +3021,80 @@ def _launch_attack(gs, kind, rage, now):
     ox = gs.boss_rect.centerx
     oy = gs.boss_rect.top + 70
 
+    # -----------------------------------------------------------
+    # ORB: esfera rasant (dues alçades a partir de la fase 2)
+    # -----------------------------------------------------------
+
     if kind == 'orb':
 
         direction = -1 if px < gs.boss_rect.centerx else 1
 
         sx = gs.boss_rect.left - 28 if direction == -1 else gs.boss_rect.right
 
-        vx = direction * (5 + rage * 0.2 + (1.5 if fase2 else 0))
+        vx = direction * (5 + 3 * prog + 1.2 * (phase - 1)) * pm
 
         alçades = [HEIGHT - 50 - 26, HEIGHT - 50 - 110]
 
-        if not fase2:
+        if phase == 1:
             alçades = [random.choice(alçades)]
 
         for y in alçades:
             _new_shot(gs, sx, y, vx, 0)
 
+    # -----------------------------------------------------------
+    # FAN: ventall d'esferes apuntades
+    # -----------------------------------------------------------
+
     elif kind == 'fan':
 
-        n = 6 if fase2 else 3
-        spread = 0.48 if fase2 else 0.28
+        n = bp(cfg['fan_n'], phase)
 
-        speed = 5 + rage * 0.15 + (1 if fase2 else 0)
+        spread = min(0.48, 0.28 + 0.07 * (n - 3), 3.3 / max(1, n - 1))
+
+        speed = (5 + 2 * prog + 0.8 * (phase - 1)) * pm
 
         base = math.atan2(py - oy, px - ox)
 
         for i in range(n):
             ang = base + (i - (n - 1) / 2) * spread
             _new_shot(
-                gs,
-                ox - 14,
-                oy - 14,
-                math.cos(ang) * speed,
-                math.sin(ang) * speed
+                gs, ox - 14, oy - 14,
+                math.cos(ang) * speed, math.sin(ang) * speed
             )
+
+    # -----------------------------------------------------------
+    # HOMING: esferes teledirigides
+    # -----------------------------------------------------------
 
     elif kind == 'homing':
 
-        speed = 3.8 + rage * 0.05
+        n = max(1, bp(cfg['homing_n'], phase))
 
-        dx = px - ox
-        dy = py - oy
+        speed = (3.6 + 1.4 * prog) * pm
 
-        d = math.hypot(dx, dy) or 1
+        base = math.atan2(py - oy, px - ox)
 
-        _new_shot(
-            gs,
-            ox - 14,
-            oy - 14,
-            dx / d * speed,
-            dy / d * speed,
-            homing_until=now + 1800,
-            speed=speed
-        )
+        for i in range(n):
+
+            ang = base + (i - (n - 1) / 2) * 0.55
+
+            _new_shot(
+                gs, ox - 14, oy - 14,
+                math.cos(ang) * speed, math.sin(ang) * speed,
+                homing_until=now + 1800 + 250 * i, speed=speed
+            )
+
+    # -----------------------------------------------------------
+    # METEORS: pluja amb avís al terra
+    # -----------------------------------------------------------
 
     elif kind == 'meteors':
 
-        n = 7 if fase2 else 4
-        warn = 650 if fase2 else 900
-        vy = 12 if fase2 else 9
+        n = bp(cfg['meteor_n'], phase)
+
+        warn = max(450, cfg['meteor_warn'] - 60 * (phase - 1))
+
+        vy = (9 + 1.2 * (phase - 1)) * pm
 
         for i in range(n):
 
@@ -2898,20 +3105,24 @@ def _launch_attack(gs, kind, rage, now):
                 'y': -40.0,
                 'vy': vy,
                 'falling': False,
-                'warn_until': now + warn + i * 120,
+                'warn_until': now + warn + i * 110,
                 'rect': pygame.Rect(int(x), -40, 28, 28)
             })
+
+    # -----------------------------------------------------------
+    # WAVE: ones pel terra (s'han de saltar)
+    # -----------------------------------------------------------
 
     elif kind == 'wave':
 
         gs.boss_shake_until = now + 350
 
-        speed = 8 if fase2 else 6
+        speed = bp(cfg['wave_speed'], phase) * pm
 
         wy = HEIGHT - 50 - 30
 
         direccions = (
-            [-1, 1] if fase2
+            [-1, 1] if phase >= 2
             else [-1 if px < gs.boss_rect.centerx else 1]
         )
 
@@ -2925,6 +3136,71 @@ def _launch_attack(gs, kind, rage, now):
                 'rect': pygame.Rect(int(wx), wy, 40, 30)
             })
 
+    # -----------------------------------------------------------
+    # DASH: embestida d'una paret a l'altra
+    # (es pot trepitjar el cap, o refugiar-se a la plataforma de dalt)
+    # -----------------------------------------------------------
+
+    elif kind == 'dash':
+
+        gs.boss_dashing = True
+        gs.boss_dash_speed = cfg['dash_speed'] * (1 + 0.08 * (phase - 1))
+        gs.boss_walking = False
+        gs.boss_shake_until = now + 250
+
+    # -----------------------------------------------------------
+    # BURST: ràfega d'esferes apuntades al jugador
+    # -----------------------------------------------------------
+
+    elif kind == 'burst':
+
+        gs.boss_burst = {'left': bp(cfg['burst_n'], phase), 'next': now}
+
+    # -----------------------------------------------------------
+    # SUMMON: invoca abelles
+    # -----------------------------------------------------------
+
+    elif kind == 'summon':
+
+        _summon_minions(gs, bp(cfg['summon_n'], phase), now)
+
+
+def _update_dash(gs, now, prog):
+    """Mou el boss durant l'embestida; s'atura (esgotat) en topar amb una paret."""
+
+    gs.boss_x += gs.boss_dash_dir * gs.boss_dash_speed
+
+    # pols darrere seu
+    if random.random() < 0.7:
+        spawn_particles(
+            gs.boss_rect.centerx - gs.boss_dash_dir * (gs.boss_w // 2),
+            HEIGHT - 50, (205, 195, 170), 2,
+            speed=2.5, life=350, size=5, gravity=0.02, upward=True
+        )
+
+    if gs.boss_x <= 20 or gs.boss_x >= WIDTH - 20 - gs.boss_w:
+
+        gs.boss_x = max(20, min(gs.boss_x, WIDTH - 20 - gs.boss_w))
+
+        gs.boss_dashing = False
+        gs.boss_dir = -gs.boss_dash_dir
+
+        # esgotat: queda aturat una estona (és el moment de pegar-li)
+        gs.boss_stun_until = now + 1000
+        gs.boss_walking = False
+        gs.boss_next_action = now + 1300
+        gs.boss_edge_choice_done = True
+
+        gs.boss_shake_until = now + 450
+
+        spawn_ring(
+            gs.boss_rect.centerx, HEIGHT - 60, (255, 230, 160), 120, 400
+        )
+
+        # a partir de la fase 3 la topada fa caure roques
+        if gs.boss_phase >= 3:
+            _launch_attack(gs, 'meteors', prog, now)
+
 
 # ===============================================================
 # UPDATE BOSS
@@ -2934,18 +3210,25 @@ def update_boss(gs, player_hitbox):
 
     now = pygame.time.get_ticks()
 
+    cfg = boss_cfg()
+
+    phase = gs.boss_phase
+
+    # progrés del combat: 0 = vida plena, 1 = a punt de morir
+    prog = 1 - max(0, gs.boss_hp) / gs.boss_max_hp
+
     update_boss_platform_debris(gs)
-
-    rage = gs.boss_max_hp - gs.boss_hp
-
-    fase2 = (gs.boss_phase == 2)
 
     in_roar = (now < gs.boss_phase_until)
 
-    charging = (gs.boss_pending is not None)
+    charging = (gs.boss_pending is not None or gs.boss_burst is not None)
+
+    # -----------------------------------------------------------
+    # PLATAFORMES ES TRENQUEN AL 75 % (si la dificultat ho té)
+    # -----------------------------------------------------------
 
     if (
-        gs.boss_phase == 1
+        cfg['platform_damage']
         and not gs.boss_platforms_deteriorated
         and gs.boss_hp <= gs.boss_platform_damage_hp
     ):
@@ -2960,32 +3243,53 @@ def update_boss(gs, player_hitbox):
     px = gs.player_x + PLAYER_SIZE[0] // 2
     py = gs.player_y + PLAYER_SIZE[1] // 2
 
-    if (
-        gs.boss_phase == 2
-        and gs.boss_phase_until > 0
-        and now >= gs.boss_phase_until
-        and not platform_special
-    ):
+    ox = gs.boss_rect.centerx
+    oy = gs.boss_rect.top + 70
+
+    # -----------------------------------------------------------
+    # DESPRÉS DEL RUGIT, TORNA A MOURE'S (un sol cop)
+    # -----------------------------------------------------------
+
+    if gs.boss_after_roar and now >= gs.boss_phase_until and not platform_special:
+
+        gs.boss_after_roar = False
         gs.boss_walking = True
+        gs.boss_next_action = now + gs.boss_walk_time
+
+    # -----------------------------------------------------------
+    # MOVIMENT
+    # -----------------------------------------------------------
 
     if not platform_special:
 
-        if now >= gs.boss_next_action:
+        if gs.boss_dashing:
 
-            gs.boss_walking = not gs.boss_walking
+            _update_dash(gs, now, prog)
 
-            gs.boss_next_action = now + (
-                gs.boss_walk_time if gs.boss_walking else gs.boss_stop_time
-            )
+        else:
 
-        if gs.boss_walking and not in_roar and not charging:
+            if now >= gs.boss_next_action and now >= gs.boss_stun_until:
 
-            speed = gs.boss_speed + rage * 0.05
+                gs.boss_walking = not gs.boss_walking
 
-            if fase2:
-                speed *= 1.6
+                gs.boss_next_action = now + (
+                    gs.boss_walk_time if gs.boss_walking else gs.boss_stop_time
+                )
 
-            gs.boss_x += gs.boss_dir * speed
+            if (
+                gs.boss_walking
+                and not in_roar
+                and not charging
+                and now >= gs.boss_stun_until
+            ):
+
+                speed = (gs.boss_speed + 1.2 * prog) * cfg['walk'] * (1 + 0.35 * (phase - 1))
+
+                gs.boss_x += gs.boss_dir * speed
+
+    # -----------------------------------------------------------
+    # VORES DE LA PANTALLA
+    # -----------------------------------------------------------
 
     at_left = (gs.boss_x <= 20)
     at_right = (gs.boss_x >= WIDTH - 20 - gs.boss_w)
@@ -2998,20 +3302,24 @@ def update_boss(gs, player_hitbox):
     if not at_left and not at_right:
         gs.boss_edge_choice_done = False
 
+    # En arribar a una vora: gira i, de vegades, fa l'atac de les plataformes
+    # (abans, a la fase 1, el boss es quedava encallat a la paret)
     if (
-        fase2
+        (at_left or at_right)
         and not platform_special
-        and (at_left or at_right)
+        and not gs.boss_dashing
+        and now >= gs.boss_stun_until
         and not gs.boss_edge_choice_done
     ):
 
         gs.boss_edge_choice_done = True
 
-        eleccio = random.randint(1, 3)
+        if phase >= 2 and random.random() < cfg['platform_attack']:
 
-        if eleccio == 1:
             start_boss_platform_attack(gs, now)
+
         else:
+
             gs.boss_walking = True
             gs.boss_static_frame = 0
             gs.boss_dir = 1 if at_left else -1
@@ -3021,27 +3329,73 @@ def update_boss(gs, player_hitbox):
 
     gs.boss_rect.x = int(gs.boss_x)
 
-    if not in_roar:
+    # -----------------------------------------------------------
+    # ATACS
+    # -----------------------------------------------------------
+
+    if (
+        not in_roar
+        and not gs.boss_dashing
+        and gs.boss_burst is None
+        and now >= gs.boss_stun_until
+    ):
 
         if gs.boss_pending is None and now >= gs.boss_next_shot:
 
-            gs.boss_pending = _choose_attack(gs)
-            gs.boss_last_attack = gs.boss_pending
+            kind = _choose_attack(gs, allow_dash=not platform_special)
 
-            gs.boss_windup_until = now + (300 if fase2 else 500)
+            gs.boss_pending = kind
+            gs.boss_last_attack = kind
+
+            base = max(240, 520 - 70 * (phase - 1))
+
+            if kind == 'dash':
+                base = 1000
+                # s'avisa cap a quin costat embestirà
+                gs.boss_dash_dir = -1 if px < gs.boss_rect.centerx else 1
+            elif kind == 'summon':
+                base = 750
+
+            gs.boss_windup_until = now + int(base * cfg['windup'])
 
         elif gs.boss_pending is not None and now >= gs.boss_windup_until:
 
-            _launch_attack(gs, gs.boss_pending, rage, now)
+            kind = gs.boss_pending
 
             gs.boss_pending = None
 
-            if fase2:
-                cooldown = max(1000, 1700 - rage * 50)
-            else:
-                cooldown = max(1100, 2200 - rage * 100)
+            _launch_attack(gs, kind, prog, now)
 
-            gs.boss_next_shot = now + cooldown
+            cooldown = max(650, (2300 - 1100 * prog - 120 * (phase - 1)) * cfg['cooldown'])
+
+            gs.boss_next_shot = now + int(cooldown)
+
+    # -----------------------------------------------------------
+    # RÀFEGA: una esfera apuntada cada 240 ms
+    # -----------------------------------------------------------
+
+    b = gs.boss_burst
+
+    if b and now >= b['next']:
+
+        ang = math.atan2(py - oy, px - ox)
+
+        speed = (6.5 + 1.5 * prog) * cfg['proj']
+
+        _new_shot(
+            gs, ox - 14, oy - 14,
+            math.cos(ang) * speed, math.sin(ang) * speed
+        )
+
+        b['left'] -= 1
+        b['next'] = now + 240
+
+        if b['left'] <= 0:
+            gs.boss_burst = None
+
+    # -----------------------------------------------------------
+    # ESFERES
+    # -----------------------------------------------------------
 
     for shot in gs.boss_shots[:]:
 
@@ -3078,6 +3432,10 @@ def update_boss(gs, player_hitbox):
         elif player_hitbox.colliderect(shot['rect']):
             gs.alive = False
 
+    # -----------------------------------------------------------
+    # METEORS
+    # -----------------------------------------------------------
+
     for m in gs.boss_meteors[:]:
 
         if not m['falling']:
@@ -3102,6 +3460,10 @@ def update_boss(gs, player_hitbox):
         elif m['rect'].collidelist(gs.platforms) != -1:
             gs.boss_meteors.remove(m)
 
+    # -----------------------------------------------------------
+    # ONES
+    # -----------------------------------------------------------
+
     for w in gs.boss_waves[:]:
 
         w['x'] += w['vx']
@@ -3112,6 +3474,10 @@ def update_boss(gs, player_hitbox):
             gs.boss_waves.remove(w)
         elif player_hitbox.colliderect(w['rect']):
             gs.alive = False
+
+    # -----------------------------------------------------------
+    # COL·LISIÓ AMB EL BOSS (trepitjar-lo li fa mal; de costat, mors)
+    # -----------------------------------------------------------
 
     if player_hitbox.colliderect(gs.boss_rect) and now >= gs.boss_invuln_until:
 
@@ -3124,7 +3490,7 @@ def update_boss(gs, player_hitbox):
 
             gs.boss_hp -= dmg
 
-            gs.boss_invuln_until = now + 1500
+            gs.boss_invuln_until = now + cfg['invuln_ms']
 
             gs.boss_flash_until = now + 250
             spawn_particles(
@@ -3150,8 +3516,8 @@ def update_boss(gs, player_hitbox):
 
             if gs.boss_hp <= 0:
                 gs.boss_dead = True
-            elif gs.boss_phase == 1 and gs.boss_hp <= gs.boss_phase2_hp:
-                _enter_phase2(gs, now)
+            else:
+                check_boss_phase(gs, now)
 
         else:
             gs.alive = False
@@ -3161,21 +3527,60 @@ def update_boss(gs, player_hitbox):
 # DIBUIX BOSS
 # ===============================================================
 
-def _boss_tinted(idx, d, img):
+def _boss_tinted(idx, d, img, phase):
 
-    key = (idx, d)
+    key = (idx, d, phase)
 
     if key not in _boss_tint_cache:
         t = img.copy()
-        t.fill((70, 0, 0), special_flags=pygame.BLEND_RGB_ADD)
+        t.fill(BOSS_PHASE_TINT.get(phase, (70, 0, 0)), special_flags=pygame.BLEND_RGB_ADD)
         _boss_tint_cache[key] = t
 
     return _boss_tint_cache[key]
 
 
+def draw_dash_warning(gs, now):
+    """Franja vermella i fletxes al terra: avisen per on embestirà."""
+
+    d = gs.boss_dash_dir
+
+    if d > 0:
+        x0, x1 = gs.boss_rect.right, WIDTH
+    else:
+        x0, x1 = 0, gs.boss_rect.left
+
+    if x1 <= x0:
+        return
+
+    band = pygame.Surface((x1 - x0, 46), pygame.SRCALPHA)
+
+    band.fill((255, 40, 40, 55 + int(45 * math.sin(now / 60))))
+
+    screen.blit(band, (x0, HEIGHT - 50 - 46))
+
+    # fletxes que avancen cap on anirà
+    offset = (now // 6) % 90
+
+    for x in range(x0 - 90, x1 + 90, 90):
+
+        cx = x + offset if d > 0 else x - offset
+
+        if cx < x0 or cx > x1:
+            continue
+
+        cy = HEIGHT - 50 - 23
+
+        pygame.draw.polygon(
+            screen, (255, 110, 110),
+            [(cx + d * 16, cy), (cx - d * 10, cy - 14), (cx - d * 10, cy + 14)]
+        )
+
+
 def draw_boss(gs):
 
     now = pygame.time.get_ticks()
+
+    phase = gs.boss_phase
 
     for m in gs.boss_meteors:
 
@@ -3231,6 +3636,10 @@ def draw_boss(gs):
                 screen, (255, 60, 60), shot['rect'].center, 18, 3
             )
 
+    # avís de l'embestida
+    if gs.boss_pending == 'dash':
+        draw_dash_warning(gs, now)
+
     in_roar = (now < gs.boss_phase_until)
     charging = (gs.boss_pending is not None)
 
@@ -3249,12 +3658,14 @@ def draw_boss(gs):
 
     blit_shadow(gs.boss_rect.centerx, HEIGHT - 50, 230, 18, 100)
 
-    if gs.boss_phase == 2:
+    # resplendor de color a partir de la fase 2
+    if phase >= 2:
         pulse = 0.5 + 0.5 * math.sin(now / 200)
         aura = pygame.Surface((gs.boss_w + 120, gs.boss_h + 60), pygame.SRCALPHA)
+        ar, ag, ab = BOSS_PHASE_AURA.get(phase, (255, 60, 20))
         pygame.draw.ellipse(
             aura,
-            (255, 60, 20, int(30 + 30 * pulse)),
+            (ar, ag, ab, int(30 + 22 * (phase - 1) + 30 * pulse)),
             aura.get_rect()
         )
         screen.blit(
@@ -3273,8 +3684,8 @@ def draw_boss(gs):
 
         img, bb = boss_frames[idx][d]
 
-        if gs.boss_phase == 2:
-            img = _boss_tinted(idx, d, img)
+        if phase >= 2:
+            img = _boss_tinted(idx, d, img, min(phase, 4))
 
         if now < gs.boss_flash_until:
             img = img.copy()
@@ -3288,6 +3699,16 @@ def draw_boss(gs):
         bx = gs.boss_rect.centerx - img.get_width() // 2 + ox
 
         by = gs.boss_rect.bottom - bb.bottom + oy
+
+        # estela mentre embesteix
+        if gs.boss_dashing:
+
+            for k in (3, 2, 1):
+
+                ghost = img.copy()
+                ghost.set_alpha(40 + 15 * (3 - k))
+
+                screen.blit(ghost, (bx - gs.boss_dash_dir * 28 * k, by))
 
         screen.blit(img, (bx, by))
 
@@ -3315,7 +3736,11 @@ def draw_boss_bar(gs):
 
     now = pygame.time.get_ticks()
 
-    fase2 = (gs.boss_phase == 2)
+    phase = gs.boss_phase
+
+    cfg = boss_cfg()
+
+    n_phases = len(cfg['phase_at']) + 1
 
     bar_w = 300
     bar_h = 18
@@ -3337,31 +3762,28 @@ def draw_boss_bar(gs):
 
     vida = max(0, gs.boss_hp) / gs.boss_max_hp
 
-    pygame.draw.rect(
-        screen,
-        (255, 110, 0) if fase2 else (230, 40, 60),
-        (x, y, int(bar_w * vida), bar_h)
-    )
+    color = BOSS_PHASE_COLORS.get(phase, (230, 40, 60))
 
-    pygame.draw.line(
-        screen,
-        WHITE,
-        (x + bar_w // 2, y - 3),
-        (x + bar_w // 2, y + bar_h + 3),
-        2
-    )
+    pygame.draw.rect(screen, color, (x, y, int(bar_w * vida), bar_h))
+
+    # una marca a cada canvi de fase
+    for f in cfg['phase_at']:
+
+        tick_x = x + int(bar_w * f)
+
+        pygame.draw.line(screen, WHITE, (tick_x, y - 3), (tick_x, y + bar_h + 3), 2)
 
     label = _font(24).render(
-        'BOSS FINAL - FASE 2' if fase2 else 'BOSS FINAL',
+        f'BOSS FINAL - FASE {phase}/{n_phases}' if n_phases > 1 else 'BOSS FINAL',
         True,
-        (255, 140, 40) if fase2 else WHITE
+        color if phase > 1 else WHITE
     )
 
     screen.blit(label, (WIDTH // 2 - label.get_width() // 2, y + bar_h + 6))
 
-    if now < gs.boss_phase_until:
+    if now < gs.boss_phase_until and phase in BOSS_PHASE_TEXT:
 
-        txt = _font(72, True).render('ENFURISMAT!', True, (255, 50, 50))
+        txt = _font(72, True).render(BOSS_PHASE_TEXT[phase], True, color)
 
         screen.blit(
             txt,
@@ -3517,7 +3939,7 @@ def show_start_menu(play_label='JUGAR', has_run=False):
 def get_difficulty_cards():
 
     card_w = 290
-    card_h = 330
+    card_h = 350
     gap = 30
 
     n = len(DIFFICULTY_ORDER)
@@ -3574,10 +3996,15 @@ def show_difficulty(selected_index):
 
         for j, line in enumerate(cfg['desc']):
 
-            t = _font(24).render(line, True, WHITE)
+            # l'última línia (el boss) va destacada
+            is_boss_line = (j == len(cfg['desc']) - 1)
+
+            t = _font(22 if is_boss_line else 24, is_boss_line).render(
+                line, True, cfg['color'] if is_boss_line else WHITE
+            )
 
             screen.blit(
-                t, (rect.centerx - t.get_width() // 2, rect.y + 130 + j * 44)
+                t, (rect.centerx - t.get_width() // 2, rect.y + 125 + j * 42)
             )
 
     help_text = _font(26).render(
@@ -5371,7 +5798,6 @@ async def game():
 
                 screen.blit(tex, (pokeball.x, pokeball.y))
 
-            # Dibuixem els enemics mortals (morts caient)
             draw_dying_enemies(gs)
 
             for i, enemy in enumerate(gs.enemies):
