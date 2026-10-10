@@ -5749,6 +5749,9 @@ async def game():
 
                 if keys[pygame.K_DOWN]:
                     pokemon_state = "ajupit"
+                    
+                if keys[pygame.K_s]:
+                    pokemon_state = "ajupit"
 
                 gs.is_ducking = keys[pygame.K_DOWN]
 
