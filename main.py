@@ -24,10 +24,59 @@ def music_file(path):
     return path
 
 
+# ---------------------------------------------------------------
+# DADES DESADES (medalles i rècords)
+# Al navegador es guarden al localStorage (si no, es perdrien en
+# refrescar la pàgina); a l'escriptori, en un fitxer .json.
+# ---------------------------------------------------------------
+
+def persist_load(key, filename):
+    """Retorna les dades desades (o None si no n'hi ha)."""
+
+    if IS_WEB:
+
+        try:
+            import platform
+            raw = platform.window.localStorage.getItem(key)
+            if raw is not None and str(raw) not in ('', 'null', 'undefined'):
+                return json.loads(str(raw))
+        except Exception:
+            pass
+
+    try:
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except (OSError, ValueError, TypeError):
+        pass
+
+    return None
+
+
+def persist_save(key, filename, data):
+
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+
+    if IS_WEB:
+
+        try:
+            import platform
+            platform.window.localStorage.setItem(key, text)
+        except Exception:
+            pass
+
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(text)
+    except OSError:
+        pass
+
+
 pygame.init()
 
 try:
     pygame.mixer.music.load(music_file('assets/musica2.mp3'))
+    pygame.mixer.music.set_volume(0.3)
     pygame.mixer.music.play(-1)
 except (pygame.error, FileNotFoundError):
     pass
@@ -44,6 +93,7 @@ _cache_fons = {}
 
 
 def imprimir_pantalla_fons(image):
+
     if image not in _cache_fons:
 
         try:
@@ -69,10 +119,12 @@ def imprimir_pantalla_fons(image):
 
 _boss_fonts = {}
 
-FONT_FILE = 'assets/font.ttf'  # opcional: una font pròpia (recomanat per al navegador)
+
+FONT_FILE = 'assets/font.ttf'      # opcional: una font pròpia (recomanat per al navegador)
 
 
 def _font(size, bold=False):
+
     key = (size, bold)
 
     if key not in _boss_fonts:
@@ -146,7 +198,7 @@ SPECIAL_KEYS = (pygame.K_c, pygame.K_k)
 
 ATTACK_COOLDOWN_MS = 800  # Cooldown augmentat
 ATTACK_SPEED = 11
-ATTACK_LIFE_FRAMES = 45  # ~0,75 s de vol
+ATTACK_LIFE_FRAMES = 45          # ~0,75 s de vol
 
 ENEMY_HP_BY_KIND = {0: 2, 1: 3, 2: 4, 3: 2}  # 0 = abella, 1 = volador gran, 2 = llop, 3 = abella perseguidora
 
@@ -157,33 +209,33 @@ ENEMY_HP_BY_KIND = {0: 2, 1: 3, 2: 4, 3: 2}  # 0 = abella, 1 = volador gran, 2 =
 GROUND_ENEMY_LEVELS = {4, 5, 6}
 GROUND_ENEMY_KIND = 2
 GROUND_ENEMY_SPEED = 2
-GROUND_ENEMY_HEIGHT = 84  # alçada en píxels (la hitbox fa la mida de la imatge)
-GROUND_ENEMY_FACES_LEFT = True  # a terra.png el llop mira cap a l'ESQUERRA
-GROUND_ENEMY_FRAME_MS = 120  # temps de cada fotograma de caminar
+GROUND_ENEMY_HEIGHT = 84          # alçada en píxels (la hitbox fa la mida de la imatge)
+GROUND_ENEMY_FACES_LEFT = True    # a terra.png el llop mira cap a l'ESQUERRA
+GROUND_ENEMY_FRAME_MS = 120       # temps de cada fotograma de caminar
 
 # ---------------------------------------------------------------
 # COMPORTAMENTS DELS ENEMICS
 # ---------------------------------------------------------------
 
 ENEMY_AI = {
-    'patrol': {'speed': 2.0},
-    'chaser': {'speed': 1.5, 'chase': 3.4, 'range': 380, 'y_range': 200},
+    'patrol':        {'speed': 2.0},
+    'chaser':        {'speed': 1.5, 'chase': 3.4, 'range': 380, 'y_range': 200},
     'ground_chaser': {'speed': GROUND_ENEMY_SPEED, 'chase': 2.8, 'range': 380, 'y_range': 160},
-    'sine': {'speed': 2.5, 'amp': 45, 'freq': 0.0035},
+    'sine':          {'speed': 2.5, 'amp': 45, 'freq': 0.0035},
 }
 
 ENEMY_AI_CYCLE = ['patrol', 'sine', 'chaser']
 
-AI_KIND = {'patrol': 1, 'sine': 0, 'chaser': 3}  # quin sprite i vida fa servir cada tipus
+AI_KIND = {'patrol': 1, 'sine': 0, 'chaser': 3}   # quin sprite i vida fa servir cada tipus
 
 # Mal en trepitjar un enemic (per tipus).
 ENEMY_STOMP_DAMAGE = {0: 1, 1: 1, 2: 1, 3: 1}
 
-# Mal de cada atac especial segons el nivell comprat (nivell 1, 2, 3)
+# Mal de cada atac especial segons el nivell comprat
 SPECIAL_DAMAGE = {
-    'cua': [1, 2, 3],
-    'plasma': [1, 2, 3],
-    'foc': [1, 2, 3],
+    'cua':    [1, 2, 3],
+    'plasma': [1, 1, 2],
+    'foc':    [1, 2, 2],
 }
 
 
@@ -194,26 +246,18 @@ def special_damage(sid, lvl):
 
 # ---------------------------------------------------------------
 # DIFICULTAT
-#
-#   hp_by_kind -> (opcional) vida fixa de cada tipus d'enemic
-#   wolf_hp    -> vida fixa del llop (si no hi ha hp_by_kind)
-#   hp         -> multiplicador de vida (si no hi ha cap dels dos)
 # ---------------------------------------------------------------
 
 DIFFICULTY_SETTINGS = {
     'facil': {
         'nom': 'FÀCIL', 'color': (80, 220, 100),
-        'desc': ["La meitat d'enemics", 'Vida al 50 %', 'Velocitat al 60 %',
-                 'Llop amb 2 de vida', 'Boss: 2 fases, atacs suaus'],
         'mode': 'frac', 'keep': 0.5,
-        'speed': 0.6, 'hp': 0.5, 'wolf_hp': 2,
+        'speed': 0.6, 'hp': 0.5, 'wolf_hp': 1,
         'chase': False, 'wolf_chase': False, 'ground_enemy': True,
         'boss_hp_mult': 1.0,
     },
     'normal': {
         'nom': 'NORMAL', 'color': (255, 220, 60),
-        'desc': ['2 enemics menys', 'No et persegueixen', 'Vida normal',
-                 'Velocitat al 80 %', 'Boss: 3 fases i embestides'],
         'mode': 'minus', 'remove': 2,
         'speed': 0.8, 'hp': 1.0, 'wolf_hp': None,
         'chase': False, 'wolf_chase': False, 'ground_enemy': True,
@@ -221,12 +265,8 @@ DIFFICULTY_SETTINGS = {
     },
     'dificil': {
         'nom': 'DIFÍCIL', 'color': (255, 80, 80),
-        'desc': ['Tots els enemics', 'Velocitat màxima',
-                 'Perseguidors i llop', 'Vida: 3 / 4 / 5',
-                 'Boss: 4 fases, invoca i ràfegues'],
         'mode': 'all',
         'speed': 1.0, 'hp': 1.0, 'wolf_hp': None,
-        'hp_by_kind': {0: 3, 1: 4, 2: 5, 3: 3},  # abella, volador gran, llop, abella vermella
         'chase': True, 'wolf_chase': True, 'ground_enemy': True,
         'boss_hp_mult': 3.5,  # Boss Vida x3.5
     },
@@ -234,7 +274,7 @@ DIFFICULTY_SETTINGS = {
 
 DIFFICULTY_ORDER = ['facil', 'normal', 'dificil']
 
-DIFFICULTY = {'key': 'normal'}  # dificultat activa
+DIFFICULTY = {'key': 'normal'}       # dificultat activa
 
 
 def diff():
@@ -247,13 +287,13 @@ def enemies_to_keep(n):
 
     d = diff()
 
-    if d['mode'] == 'frac':  # fàcil: la meitat (mínim 1)
+    if d['mode'] == 'frac':                      # fàcil: la meitat (mínim 1)
         return min(n, max(1, math.ceil(n * d['keep'])))
 
-    if d['mode'] == 'minus':  # normal: -2, però mai més del 50 %
+    if d['mode'] == 'minus':                     # normal: -2, però mai més del 50 %
         return n - min(d['remove'], n // 2)
 
-    return n  # difícil: tots
+    return n                                     # difícil: tots
 
 
 def record_key(base):
@@ -263,6 +303,237 @@ def record_key(base):
         return str(base)
 
     return f"{base}_{DIFFICULTY['key']}"
+
+
+# ---------------------------------------------------------------
+# MEDALLES (persistència + dibuix)
+#
+#   'completed' -> has derrotat el Boss Final en aquesta dificultat
+#   'no_deaths' -> l'has derrotat sense que cap personatge hagi mort
+#                  (medalla TOP)
+# ---------------------------------------------------------------
+
+MEDALS_FILE = 'medals.json'
+MEDALS_KEY = 'pokequest_medals'
+
+MEDALS = {
+    'facil': {'completed': False, 'no_deaths': False},
+    'normal': {'completed': False, 'no_deaths': False},
+    'dificil': {'completed': False, 'no_deaths': False},
+}
+
+# Si és True, reviure amb "Vida extra" també compta com a mort
+# (i per tant es perd la medalla TOP).
+REVIVE_COUNTS_AS_DEATH = True
+
+
+def load_medals():
+
+    data = persist_load(MEDALS_KEY, MEDALS_FILE)
+
+    if isinstance(data, dict):
+
+        for k in MEDALS:
+
+            if isinstance(data.get(k), dict):
+
+                MEDALS[k]['completed'] = bool(data[k].get('completed', False))
+                MEDALS[k]['no_deaths'] = bool(data[k].get('no_deaths', False))
+
+
+def save_medals():
+    persist_save(MEDALS_KEY, MEDALS_FILE, MEDALS)
+
+
+# Aspecte de cada medalla (com les insígnies de gimnàs Pokémon)
+MEDAL_INFO = {
+    'facil': {
+        'shape': 'hex', 'color': (80, 200, 100), 'emblem': 'leaf',
+        'emb': ((235, 255, 235), (40, 130, 70)),
+    },
+    'normal': {
+        'shape': 'oct', 'color': (255, 205, 50), 'emblem': 'bolt',
+        'emb': ((255, 255, 255), (225, 135, 10)),
+    },
+    'dificil': {
+        'shape': 'star', 'color': (225, 60, 60), 'emblem': 'flame',
+        'emb': ((255, 170, 40), (255, 240, 130)),
+    },
+}
+
+
+def _reg_poly(cx, cy, r, n, rot=-90):
+
+    return [
+        (
+            cx + r * math.cos(math.radians(rot + 360 * i / n)),
+            cy + r * math.sin(math.radians(rot + 360 * i / n))
+        )
+        for i in range(n)
+    ]
+
+
+def _star_poly(cx, cy, r_out, r_in, n, rot=-90):
+
+    pts = []
+
+    for i in range(n * 2):
+
+        r = r_out if i % 2 == 0 else r_in
+
+        a = math.radians(rot + 180 * i / n)
+
+        pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+
+    return pts
+
+
+def _rot(pts, cx, cy, deg):
+
+    c = math.cos(math.radians(deg))
+    s = math.sin(math.radians(deg))
+
+    return [
+        (cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c)
+        for x, y in pts
+    ]
+
+
+def _medal_shape(kind, cx, cy, r):
+
+    if kind == 'hex':
+        return _reg_poly(cx, cy, r, 6)
+
+    if kind == 'oct':
+        return _reg_poly(cx, cy, r, 8, -67.5)
+
+    return _star_poly(cx, cy, r, r * 0.74, 8)
+
+
+def _draw_emblem(target, kind, cx, cy, s, c1, c2):
+
+    if kind == 'leaf':
+
+        n = 10
+
+        right = [
+            (cx + 0.62 * s * math.sin(math.pi * t / n), cy - s + 2 * s * t / n)
+            for t in range(n + 1)
+        ]
+
+        left = [
+            (cx - 0.62 * s * math.sin(math.pi * t / n), cy - s + 2 * s * t / n)
+            for t in range(n, -1, -1)
+        ]
+
+        pygame.draw.polygon(target, c1, _rot(right + left, cx, cy, 35))
+
+        vein = _rot([(cx, cy - s * 0.95), (cx, cy + s * 1.05)], cx, cy, 35)
+
+        pygame.draw.line(target, c2, vein[0], vein[1], max(1, int(s * 0.14)))
+
+    elif kind == 'bolt':
+
+        rel = [(0.15, -1.0), (-0.65, 0.15), (-0.08, 0.15),
+               (-0.3, 1.0), (0.65, -0.2), (0.08, -0.2)]
+
+        pts = [(cx + x * s, cy + y * s) for x, y in rel]
+
+        pygame.draw.polygon(target, c1, pts)
+        pygame.draw.polygon(target, c2, pts, max(1, int(s * 0.12)))
+
+    else:
+
+        rel = [(0.05, -1.0), (0.45, -0.4), (0.6, 0.2), (0.4, 0.8), (0.0, 1.0),
+               (-0.4, 0.8), (-0.6, 0.25), (-0.35, -0.1), (-0.2, 0.3), (-0.12, -0.45)]
+
+        pygame.draw.polygon(target, c1, [(cx + x * s, cy + y * s) for x, y in rel])
+
+        inner = [(0.0, 0.1), (0.28, 0.5), (0.0, 0.9), (-0.28, 0.55)]
+
+        pygame.draw.polygon(target, c2, [(cx + x * s, cy + y * s) for x, y in inner])
+
+
+def draw_star(target, cx, cy, r, color, outline=None):
+    """Estrella de 5 puntes."""
+
+    pts = _star_poly(cx, cy, r, r * 0.45, 5)
+
+    pygame.draw.polygon(target, color, pts)
+
+    if outline:
+        pygame.draw.polygon(target, outline, pts, 1)
+
+
+def draw_medal(target, cx, cy, size, key, top=False, unlocked=True, now=0):
+    """
+    Dibuixa una medalla.
+      key      -> 'facil' / 'normal' / 'dificil' (forma i color)
+      top      -> False = medalla (vora de plata), True = medalla TOP (vora d'or, estrella i espurnes)
+      unlocked -> False = només la silueta fosca (encara no la tens)
+    """
+
+    info = MEDAL_INFO[key]
+
+    r = size / 2
+
+    if not unlocked:
+
+        sil = _medal_shape(info['shape'], cx, cy, r)
+
+        pygame.draw.polygon(target, (36, 40, 54), sil)
+        pygame.draw.polygon(target, (96, 102, 122), sil, max(1, int(size / 22)))
+
+        _draw_emblem(target, info['emblem'], cx, cy, r * 0.42, (62, 68, 86), (62, 68, 86))
+
+        if top:
+            draw_star(target, cx, cy - r * 0.98, r * 0.34, (62, 68, 86))
+
+        return
+
+    rim = (255, 215, 0) if top else (205, 210, 225)
+    rim_dark = (200, 150, 0) if top else (140, 145, 165)
+
+    outer = _medal_shape(info['shape'], cx, cy, r)
+
+    pygame.draw.polygon(target, rim, outer)
+    pygame.draw.polygon(target, rim_dark, outer, max(1, int(size / 24)))
+
+    body = _medal_shape(info['shape'], cx, cy, r * 0.8)
+
+    pygame.draw.polygon(target, info['color'], body)
+
+    # reflex de llum
+    base = info['color']
+
+    light = (min(255, base[0] + 70), min(255, base[1] + 70), min(255, base[2] + 70))
+
+    pygame.draw.circle(
+        target, light, (int(cx - r * 0.32), int(cy - r * 0.36)), max(1, int(r * 0.13))
+    )
+
+    c1, c2 = info['emb']
+
+    _draw_emblem(target, info['emblem'], cx, cy + r * 0.02, r * 0.46, c1, c2)
+
+    if top:
+
+        draw_star(target, cx, cy - r * 0.98, r * 0.36, (255, 245, 150), (200, 150, 0))
+
+        # espurnes que giren al voltant
+        for k in range(3):
+
+            ang = now / 400.0 + k * 2.1
+
+            sx = cx + math.cos(ang) * r * 1.12
+            sy = cy + math.sin(ang * 1.3) * r
+
+            a = 0.5 + 0.5 * math.sin(now / 180 + k * 1.7)
+
+            length = max(1, int(r * 0.22 * a))
+
+            pygame.draw.line(target, (255, 255, 200), (sx - length, sy), (sx + length, sy), 1)
+            pygame.draw.line(target, (255, 255, 200), (sx, sy - length), (sx, sy + length), 1)
 
 
 # ---------------------------------------------------------------
@@ -379,8 +650,12 @@ START_LEVEL = 1
 RESUME_AT_NEXT_LEVEL = False
 PROGRESS = {'level': None}
 
+# Morts de la partida actual (per a la medalla TOP)
+RUN = {'deaths': 0}
+
 
 def resume_level():
+
     lvl = PROGRESS['level']
 
     if lvl is None:
@@ -393,7 +668,10 @@ def resume_level():
 
 
 def reset_progress():
+    """Comença una partida nova: sense progrés i sense cap mort comptada."""
+
     PROGRESS['level'] = None
+    RUN['deaths'] = 0
 
 
 BOSS_LEVEL = 11
@@ -433,19 +711,20 @@ BOSS_PLATFORM_SPECIAL_MAX = 7000
 
 BOSS_PLATFORM_RETURN_WARNING = 2000
 
-BOSS_PHASE2_ROAR_TIME = 1600  # durada del rugit en canviar de fase
+BOSS_PHASE2_ROAR_TIME = 1600      # durada del rugit en canviar de fase
 
 # ---------------------------------------------------------------
 # DERROTA DEL BOSS I GAME OVER
 # ---------------------------------------------------------------
 
-BOSS_DEATH_MS = 4600  # durada de l'animació de derrota del boss
-BOSS_DEATH_BLAST = 3000  # moment de l'explosió final
-GO_INPUT_MS = 2200  # a la pantalla de GAME OVER, fins aquí no es llegeixen tecles
+BOSS_DEATH_MS = 4600        # durada de l'animació de derrota del boss
+BOSS_DEATH_BLAST = 3000     # moment de l'explosió final
+GO_INPUT_MS = 2200          # a la pantalla de GAME OVER, fins aquí no es llegeixen tecles
 
 BOSS_SCALE = 4
 BOSS_FRAMES = 4
 BOSS_FRAME_MS = 500
+
 
 LEVEL_BACKGROUNDS = {
     1: 'assets/dia.png',
@@ -460,6 +739,7 @@ LEVEL_BACKGROUNDS = {
     10: 'assets/dia.png',
     11: 'assets/dia.png',
 }
+
 
 # ---------------------------------------------------------------
 # PARTIDA GUARDADA
@@ -506,28 +786,30 @@ def add_points(n):
 # ---------------------------------------------------------------
 
 RECORDS_FILE = 'records.json'
+RECORDS_KEY = 'pokequest_records'
 RECORDS = {}
 
 
 def load_records():
-    try:
-        with open(RECORDS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        RECORDS.clear()
-        RECORDS.update({str(k): float(v) for k, v in data.items()})
-    except (OSError, ValueError, TypeError):
-        RECORDS.clear()
+
+    data = persist_load(RECORDS_KEY, RECORDS_FILE)
+
+    RECORDS.clear()
+
+    if isinstance(data, dict):
+
+        try:
+            RECORDS.update({str(k): float(v) for k, v in data.items()})
+        except (TypeError, ValueError):
+            RECORDS.clear()
 
 
 def save_records():
-    try:
-        with open(RECORDS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(RECORDS, f, indent=2)
-    except OSError:
-        pass
+    persist_save(RECORDS_KEY, RECORDS_FILE, RECORDS)
 
 
 def submit_record(key, t):
+
     key = str(key)
     best = RECORDS.get(key)
 
@@ -579,7 +861,7 @@ ABILITIES = {
         {'id': 'doble_fort', 'nom': 'Doble salt potent',
          'desc': 'El segon salt és més fort', 'costs': [6, 12]},
         {'id': 'mal_boss', 'nom': 'Foc intens',
-         'desc': 'Fa +1 de mal per nivell (enemics i boss)', 'costs': [12, 22]},
+         'desc': 'Fa +1 de mal al boss per nivell', 'costs': [12, 22]},
         {'id': 'enemics_lents', 'nom': 'Enemics lents',
          'desc': 'Els enemics volen més lents', 'costs': [5, 10]},
         {'id': 'foc', 'nom': 'Cometa de foc',
@@ -606,6 +888,7 @@ def ability_level(nom, ab_id):
 
 
 def buy_ability(nom, ab):
+
     level = ability_level(nom, ab['id'])
 
     if level >= len(ab['costs']):
@@ -621,6 +904,8 @@ def buy_ability(nom, ab):
 
     save_game()
 
+    play_sfx('millorar_abilitat')
+
     return True, f'{ab["nom"]} millorada al nivell {level + 1}!'
 
 
@@ -632,9 +917,44 @@ sfx = {}
 MUTED = {'on': False}
 
 
+# ---------------------------------------------------------------
+# VOLUM DE LA MÚSICA DE FONS  (0.0 = silenci ... 1.0 = màxim)
+# Baixa o puja el número de la música que sona massa fort / fluix.
+# ---------------------------------------------------------------
+
+MUSIC_VOLUME = {
+    'lluita': 0.20,        # música dels nivells
+    'musica2': 0.30,        # música del menú i de la pantalla final
+    'musica_mort': 0.60,    # música quan mors
+}
+MUSIC_DEFAULT_VOLUME = 0.5
+
+MUSIC = {'track': 'musica2', 'fade': 1.0}
+
+
+def music_volume():
+    return MUSIC_VOLUME.get(MUSIC['track'], MUSIC_DEFAULT_VOLUME)
+
+
 def apply_volume():
     try:
-        pygame.mixer.music.set_volume(0.0 if MUTED['on'] else 1.0)
+        pygame.mixer.music.set_volume(
+            0.0 if MUTED['on'] else music_volume() * MUSIC['fade']
+        )
+    except pygame.error:
+        pass
+
+
+def sync_music_volume():
+    """S'executa a cada fotograma: així el volum sempre és el de MUSIC_VOLUME,
+    encara que el navegador o el reproductor el tornin a pujar en carregar una música."""
+
+    apply_volume()
+
+
+def music_fadeout(ms=700):
+    try:
+        pygame.mixer.music.fadeout(ms)
     except pygame.error:
         pass
 
@@ -654,6 +974,7 @@ def music_unpause():
 
 
 def music_replay():
+    apply_volume()
     try:
         pygame.mixer.music.play()
     except pygame.error:
@@ -665,20 +986,42 @@ def toggle_mute():
     apply_volume()
 
 
+# Tots els sons es toquen UN SOL COP (mai en bucle) i no tallen la música de fons.
+#   iniciar_partida   -> en començar una partida (en triar personatge)
+#   victoria_nivell   -> en completar un nivell
+#   millorar_abilitat -> en comprar una habilitat a la botiga
+#   recollir_pokeball -> en agafar una pokeball
+#   mort_enemic       -> en matar un enemic
+SFX_NAMES = (
+    'salt', 'pokeball', 'hit', 'atac',
+    'iniciar_partida', 'victoria_nivell', 'millorar_abilitat',
+    'recollir_pokeball', 'mort_enemic',
+)
+
+SFX_VOLUME = {          # volum de cada so (0.0 - 1.0); els que no hi són, 0.5
+    'iniciar_partida': 0.6,
+    'victoria_nivell': 0.6,
+    'millorar_abilitat': 0.6,
+    'recollir_pokeball': 0.5,
+    'mort_enemic': 0.7,
+}
+
+
 def load_sfx():
     if not pygame.mixer.get_init():
         return
-    for name in ('salt', 'pokeball', 'hit', 'atac'):
-        for ext in ('wav', 'ogg'):
+    for name in SFX_NAMES:
+        # .ogg primer (és el que funciona bé al navegador), després .wav i .mp3
+        for ext in ('ogg', 'wav', 'mp3'):
             ruta = f'assets/{name}.{ext}'
             if os.path.exists(ruta):
                 try:
                     snd = pygame.mixer.Sound(ruta)
-                    snd.set_volume(0.5)
+                    snd.set_volume(SFX_VOLUME.get(name, 0.5))
                     sfx[name] = snd
+                    break
                 except pygame.error:
-                    pass
-                break
+                    continue
 
 
 def play_sfx(name):
@@ -856,9 +1199,11 @@ STARS = [
 
 
 def _cloud_surface(scale):
+
     key = round(scale, 1)
 
     if key not in _cloud_cache:
+
         w = int(170 * key)
         h = int(70 * key)
 
@@ -876,11 +1221,13 @@ def _cloud_surface(scale):
 
 
 def draw_ambient(level, now, player_x):
+
     shift = player_x - WIDTH / 2
 
     if level in NIGHT_LEVELS:
 
         for x, y, r, ph in STARS:
+
             b = int(170 + 80 * math.sin(now / 450 + ph))
 
             pygame.draw.circle(
@@ -893,6 +1240,7 @@ def draw_ambient(level, now, player_x):
     else:
 
         for c in CLOUDS:
+
             surf = _cloud_surface(c['scale'])
 
             x = (c['x'] + now * c['speed'] * 0.06) % (WIDTH + 400) - 200
@@ -952,6 +1300,7 @@ def draw_fade_in():
 # ---------------------------------------------------------------
 
 def build_platforms(level):
+
     H = HEIGHT
     R = pygame.Rect
 
@@ -1074,6 +1423,8 @@ class GameState:
         self.jump_buffer_until = 0
 
         self.alive = True
+        self.has_died = False
+        self.death_counted = False
         self.death_music_played = False
         self.death_fx = False
         self.game_over_at = 0
@@ -1086,7 +1437,6 @@ class GameState:
 
         self.boss_damage = 1
         self.stomp_bounce = 0
-        self.enemy_bonus = 0
 
         self.collected_pokeballs = 0
         self.level_points = 0
@@ -1205,16 +1555,10 @@ class GameState:
 
     def _add_enemy(self, rect, kind, ai, **extra):
 
-        d = diff()
-
-        table = d.get('hp_by_kind')
-
-        if table:
-            hp = table[kind]  # vida fixa per tipus
-        elif kind == GROUND_ENEMY_KIND and d['wolf_hp']:
-            hp = d['wolf_hp']  # llop: vida fixa
+        if kind == GROUND_ENEMY_KIND and diff()['wolf_hp']:
+            hp = diff()['wolf_hp']
         else:
-            hp = max(1, round(ENEMY_HP_BY_KIND[kind] * d['hp']))
+            hp = max(1, round(ENEMY_HP_BY_KIND[kind] * diff()['hp']))
 
         direction = random.choice([-1, 1])
 
@@ -1262,39 +1606,6 @@ class GameState:
             rect = pygame.Rect(WIDTH // 2, 120, w, h)
 
         self._add_enemy(rect, kind, 'sine')
-
-    def _spawn_flyer_side(self, kind, w, h):
-        """Reaparició: entra per una vora, la més llunyana al jugador."""
-
-        amp = ENEMY_AI['sine']['amp']
-
-        from_left = self.player_x > WIDTH // 2
-
-        x = 4 if from_left else WIDTH - w - 4
-
-        rect = None
-
-        for attempt in range(60):
-
-            y = random.randint(150, HEIGHT - 230)
-
-            r = pygame.Rect(x, y, w, h)
-
-            zone = r.inflate(0, 2 * amp) if attempt < 40 else r
-
-            if zone.collidelist(self.platforms) == -1:
-                rect = r
-                break
-
-        if rect is None:
-            rect = pygame.Rect(x, 150, w, h)
-
-        self._add_enemy(rect, kind, 'sine')
-
-        # va cap a dins de la pantalla
-        self.enemy_ai[id(rect)]['dir'] = 1 if from_left else -1
-
-        spawn_ring(rect.centerx, rect.centery, WHITE, 40, 300)
 
     def _spawn_enemies(self):
 
@@ -1399,9 +1710,9 @@ class GameState:
 
                 for existing in pokeballs:
                     distance = (
-                                       (new_pokeball.x - existing.x) ** 2
-                                       + (new_pokeball.y - existing.y) ** 2
-                               ) ** 0.5
+                        (new_pokeball.x - existing.x) ** 2
+                        + (new_pokeball.y - existing.y) ** 2
+                    ) ** 0.5
                     if distance < MIN_POKEBALL_DISTANCE:
                         too_close = True
                         break
@@ -1411,7 +1722,7 @@ class GameState:
                     continue
 
                 if all(
-                        not new_pokeball.colliderect(p) for p in self.platforms
+                    not new_pokeball.colliderect(p) for p in self.platforms
                 ) and all(
                     not new_pokeball.colliderect(e) for e in self.enemies
                 ):
@@ -1446,11 +1757,11 @@ class GameState:
             boss_phase_timing(self)
 
             if (
-                    old_platforms_deteriorated
-                    or (
+                old_platforms_deteriorated
+                or (
                     boss_cfg()['platform_damage']
                     and self.boss_hp <= self.boss_platform_damage_hp
-            )
+                )
             ):
                 deteriorate_boss_platforms(self)
 
@@ -1475,6 +1786,7 @@ class GameState:
 class Sprite:
 
     def __init__(self, surf):
+
         self.surf = {0: surf, 1: pygame.transform.flip(surf, True, False)}
 
         self.bb = {
@@ -1483,6 +1795,7 @@ class Sprite:
         }
 
     def draw(self, target, direccio, centre_x, peus_y, dy=0):
+
         s = self.surf[direccio]
         bb = self.bb[direccio]
 
@@ -1492,6 +1805,7 @@ class Sprite:
 class Character:
 
     def __init__(self, nom, idle, run, duck, bounce=None):
+
         self.nom = nom
         self.idle = Sprite(idle)
         self.run = [Sprite(s) for s in run]
@@ -1500,6 +1814,7 @@ class Character:
 
 
 def lean_scale(surf, sx, sy, lean):
+
     w, h = surf.get_size()
 
     nw = max(1, int(w * sx))
@@ -1520,6 +1835,7 @@ def lean_scale(surf, sx, sy, lean):
 
 
 def make_pikachu():
+
     idle = pygame.image.load('assets/pikachu.png').convert_alpha()
 
     run = [
@@ -1536,6 +1852,7 @@ def make_pikachu():
 
 
 def make_eevee_evolution(nom, path):
+
     flip = nom in SPRITE_FACES_LEFT
 
     base = pygame.image.load(path).convert_alpha()
@@ -1592,6 +1909,7 @@ logo_texture = None
 
 
 def remove_logo_background(surf):
+
     w, h = surf.get_size()
 
     to_bytes = getattr(pygame.image, 'tobytes', None) or pygame.image.tostring
@@ -1656,6 +1974,7 @@ def remove_logo_background(surf):
 
 
 def load_boss_frames():
+
     imatges = []
 
     for i in range(1, BOSS_FRAMES + 1):
@@ -1669,6 +1988,7 @@ def load_boss_frames():
         imatges.append(boss_raw.subsurface(bb).copy())
 
     for img in imatges:
+
         gran = pygame.transform.scale(
             img,
             (img.get_width() * BOSS_SCALE, img.get_height() * BOSS_SCALE)
@@ -1683,6 +2003,7 @@ def load_boss_frames():
 
 
 def _scale_ground(img, crop, k):
+
     img = img.subsurface(crop).copy()
 
     img = pygame.transform.scale(
@@ -1696,6 +2017,7 @@ def _scale_ground(img, crop, k):
 
 
 def load_ground_enemy():
+
     ground_frames[0].clear()
     ground_frames[1].clear()
     ground_bob.clear()
@@ -1757,6 +2079,7 @@ def load_ground_enemy():
 
 
 def load_textures():
+
     global platform_texture
     global float_platform_texture
     global pokeball_texture
@@ -1874,9 +2197,11 @@ def load_textures():
 load_sfx()
 load_save()
 load_records()
+load_medals()
 
 
 def enemy_hitbox_size(kind):
+
     if kind == 1:
         return enemy_texture2.get_size()
 
@@ -1884,6 +2209,7 @@ def enemy_hitbox_size(kind):
 
 
 def get_player_hitbox(x, y, ducking):
+
     if ducking:
         return pygame.Rect(x + 10, y + 10, 20, 10)
 
@@ -1893,6 +2219,7 @@ def get_player_hitbox(x, y, ducking):
 
 
 def try_revive(gs, now):
+
     if gs.alive:
         return
 
@@ -1907,6 +2234,9 @@ def try_revive(gs, now):
         consumed = True
     else:
         return
+
+    # ha reviscut: la propera mort tornarà a comptar
+    gs.death_counted = False
 
     if consumed or gs.player_y > HEIGHT - 20:
         gs.player_x = 100
@@ -1926,6 +2256,7 @@ _face_cache = {}
 
 
 def _to_gray(surf):
+
     if hasattr(pygame.transform, 'grayscale'):
         g = pygame.transform.grayscale(surf)
     else:
@@ -1937,6 +2268,7 @@ def _to_gray(surf):
 
 
 def get_face(index, size, gray=False):
+
     key = (index, size, gray)
 
     if key in _face_cache:
@@ -1983,6 +2315,7 @@ def get_face(index, size, gray=False):
     )
 
     if gray:
+
         icon = _to_gray(icon)
 
         pygame.draw.line(icon, (220, 30, 30), (5, 5), (size - 6, size - 6), 3)
@@ -1994,6 +2327,7 @@ def get_face(index, size, gray=False):
 
 
 def draw_character_faces(current, used_characters, x, y, size=36, gap=8):
+
     for i in range(len(CHARACTERS)):
 
         is_used = i in used_characters
@@ -2023,6 +2357,7 @@ def draw_character_faces(current, used_characters, x, y, size=36, gap=8):
 # ---------------------------------------------------------------
 
 def draw_cd_bar(x, y, w, h, frac, color):
+
     frac = max(0.0, min(1.0, frac))
 
     pygame.draw.rect(screen, (40, 40, 40), (x, y, w, h))
@@ -2035,6 +2370,7 @@ def draw_cd_bar(x, y, w, h, frac, color):
 # ===============================================================
 
 def attacks_unlocked(nom):
+
     if not BASIC_ATTACK_REQUIRES_SPECIAL:
         return True
 
@@ -2045,6 +2381,7 @@ def attacks_unlocked(nom):
 
 def _add_attack(gs, kind, cx, cy, d, size, speed, life, color, dmg=1,
                 pierce=False, splash=0, follow=False, w=None, h=None):
+
     w = w or size
     h = h or size
 
@@ -2069,6 +2406,7 @@ def _add_attack(gs, kind, cx, cy, d, size, speed, life, color, dmg=1,
 
 
 def fire_basic(gs, nom, d):
+
     cx = gs.player_x + PLAYER_SIZE[0] // 2 + d * 20
     cy = gs.player_y + PLAYER_SIZE[1] // 2
 
@@ -2101,6 +2439,7 @@ def fire_basic(gs, nom, d):
 
 
 def fire_special(gs, nom, d):
+
     sid = SPECIAL_BY_CHAR.get(nom)
 
     if not sid:
@@ -2117,6 +2456,7 @@ def fire_special(gs, nom, d):
     color = ATTACK_COLORS.get(nom, WHITE)
 
     if sid == 'cua':
+
         reach = 220 + 60 * (lvl - 1)
 
         _add_attack(
@@ -2127,6 +2467,7 @@ def fire_special(gs, nom, d):
         return 1500 - 150 * (lvl - 1)
 
     if sid == 'plasma':
+
         _add_attack(
             gs, 'ring', px + d * 24, py, d, 0, 14 + lvl, 70, color,
             dmg=special_damage('plasma', lvl), pierce=True, w=34, h=72
@@ -2135,6 +2476,7 @@ def fire_special(gs, nom, d):
         return 1300 - 150 * (lvl - 1)
 
     if sid == 'foc':
+
         _add_attack(
             gs, 'fire', px + d * 24, py, d, 26 + 4 * lvl, 9, 80, color,
             dmg=special_damage('foc', lvl),
@@ -2147,6 +2489,7 @@ def fire_special(gs, nom, d):
 
 
 def move_enemy(gs, i, enemy, player_hitbox, slow, now):
+
     d = gs.enemy_ai.get(id(enemy))
 
     if d is None:
@@ -2246,6 +2589,7 @@ def move_enemy(gs, i, enemy, player_hitbox, slow, now):
 
 
 def update_dying_enemies(gs):
+
     for de in gs.dying_enemies[:]:
         de['x'] += de['vx']
         de['y'] += de['vy']
@@ -2256,13 +2600,15 @@ def update_dying_enemies(gs):
 
 
 def update_respawns(gs, now):
+
     for r in gs.respawning_enemies[:]:
         if now >= r['respawn_at']:
-            gs._spawn_flyer_side(r['kind'], r['w'], r['h'])
+            gs._spawn_flyer(r['kind'], r['w'], r['h'])
             gs.respawning_enemies.remove(r)
 
 
 def draw_dying_enemies(gs):
+
     for de in gs.dying_enemies:
         k = de['kind']
         flip = de['flip']
@@ -2284,6 +2630,7 @@ def draw_dying_enemies(gs):
 
 
 def hit_enemy(gs, i, dmg, color):
+
     e = gs.enemies[i]
 
     shown = min(dmg, max(gs.enemy_hp[i], 0))
@@ -2302,7 +2649,7 @@ def hit_enemy(gs, i, dmg, color):
             e.centerx, e.centery, WHITE, 16, speed=4, life=450, size=5,
             gravity=0.1
         )
-        play_sfx('hit')
+        play_sfx('mort_enemic')
 
         kind = gs.enemy_kind[i]
         facing_flip = (gs.enemy_speeds[i] < 0)
@@ -2343,6 +2690,7 @@ def hit_enemy(gs, i, dmg, color):
 
 
 def damage_boss(gs, now):
+
     dmg = getattr(gs, 'boss_damage', 1)
 
     gs.boss_hp -= dmg
@@ -2363,6 +2711,7 @@ def damage_boss(gs, now):
 
 
 def update_attacks(gs, now):
+
     px = gs.player_x + PLAYER_SIZE[0] // 2
     py = gs.player_y + PLAYER_SIZE[1] // 2
 
@@ -2422,10 +2771,7 @@ def update_attacks(gs, now):
             hit_id = id(e)
             ex, ey = e.centerx, e.centery
 
-            # Foc intens (Flareon): +mal a tots els enemics
-            dmg = a['dmg'] + gs.enemy_bonus
-
-            hit_enemy(gs, i, dmg, a['color'])
+            hit_enemy(gs, i, a['dmg'], a['color'])
 
             if a['splash']:
 
@@ -2441,7 +2787,7 @@ def update_attacks(gs, now):
                     if id(e2) == hit_id:
                         continue
                     if math.hypot(e2.centerx - ex, e2.centery - ey) <= a['splash']:
-                        hit_enemy(gs, j, dmg, a['color'])
+                        hit_enemy(gs, j, a['dmg'], a['color'])
 
                 consumed = True
                 break
@@ -2469,6 +2815,7 @@ def update_attacks(gs, now):
 
 
 def _zigzag(x0, x1, cy, amp, n):
+
     pts = []
 
     for k in range(n + 1):
@@ -2480,6 +2827,7 @@ def _zigzag(x0, x1, cy, amp, n):
 
 
 def draw_attacks(gs):
+
     for a in gs.attacks:
 
         r = a['rect']
@@ -2594,6 +2942,7 @@ _boss_tint_cache = {}
 
 
 def init_boss_extras(gs):
+
     gs.boss_phase = 1
 
     gs.boss_phase_until = 0
@@ -2632,6 +2981,7 @@ def init_boss_extras(gs):
 
 
 def _new_shot(gs, x, y, vx, vy, homing_until=0, speed=0.0):
+
     gs.boss_shots.append({
         'x': float(x),
         'y': float(y),
@@ -2644,6 +2994,7 @@ def _new_shot(gs, x, y, vx, vy, homing_until=0, speed=0.0):
 
 
 def _choose_attack(gs, allow_dash=True):
+
     attacks = boss_cfg()['attacks']
 
     pool = dict(attacks[min(gs.boss_phase, max(attacks))])
@@ -2676,6 +3027,7 @@ _BOSS_TIMERS = (
 
 
 def shift_boss_timers(gs, dt):
+
     for attr in _BOSS_TIMERS:
         v = getattr(gs, attr, 0)
         if v > 0:
@@ -2700,6 +3052,7 @@ def shift_boss_timers(gs, dt):
 # ===============================================================
 
 def deteriorate_boss_platforms(gs):
+
     if not gs.is_boss:
         return
 
@@ -2728,6 +3081,7 @@ def deteriorate_boss_platforms(gs):
         gs.boss_platform_damaged_rects.append(platform.copy())
 
         for _ in range(random.randint(10, 16)):
+
             piece_x = random.randint(platform.left, platform.right)
             piece_y = platform.bottom - random.randint(2, 8)
 
@@ -2751,6 +3105,7 @@ def deteriorate_boss_platforms(gs):
 
 
 def update_boss_platform_debris(gs):
+
     if not gs.is_boss:
         return
 
@@ -2768,10 +3123,12 @@ def update_boss_platform_debris(gs):
 
 
 def draw_boss_platform_debris(gs):
+
     if not gs.is_boss:
         return
 
     for piece in gs.boss_platform_debris:
+
         size = piece['size']
         x = int(piece['x'])
         y = int(piece['y'])
@@ -2789,6 +3146,7 @@ def draw_boss_platform_debris(gs):
 
 
 def hide_boss_platforms(gs):
+
     if not gs.is_boss:
         return
 
@@ -2800,6 +3158,7 @@ def hide_boss_platforms(gs):
 
 
 def restore_boss_platforms(gs):
+
     if not gs.is_boss:
         return
 
@@ -2819,6 +3178,7 @@ def restore_boss_platforms(gs):
 # ===============================================================
 
 def start_boss_platform_attack(gs, now):
+
     gs.boss_walking = False
     gs.boss_pending = None
 
@@ -2835,6 +3195,7 @@ def start_boss_platform_attack(gs, now):
 
 
 def update_boss_platform_attack(gs, now):
+
     if not gs.is_boss:
         return
 
@@ -2844,6 +3205,7 @@ def update_boss_platform_attack(gs, now):
         gs.boss_static_frame = 0
 
         if now >= gs.boss_platform_event_until:
+
             gs.boss_platform_event = "special_attack"
             gs.boss_platform_pre_roar = False
 
@@ -2870,6 +3232,7 @@ def update_boss_platform_attack(gs, now):
         gs.boss_static_frame = 0
 
         if now >= gs.boss_platform_event_until:
+
             gs.boss_platform_event = "return_warning"
             gs.boss_platform_event_until = now + BOSS_PLATFORM_RETURN_WARNING
 
@@ -2908,11 +3271,13 @@ def update_boss_platform_attack(gs, now):
 # ===============================================================
 
 def boss_phase_timing(gs):
+
     gs.boss_walk_time = 800 + 250 * (gs.boss_phase - 1)
     gs.boss_stop_time = max(150, 400 - 80 * (gs.boss_phase - 1))
 
 
 def _enter_phase(gs, phase, now):
+
     gs.boss_phase = phase
 
     gs.boss_shots.clear()
@@ -2946,6 +3311,7 @@ def _enter_phase(gs, phase, now):
 
 
 def check_boss_phase(gs, now):
+
     target = boss_phase_for_hp(gs, gs.boss_hp)
 
     if target > gs.boss_phase:
@@ -2957,9 +3323,11 @@ def check_boss_phase(gs, now):
 # ===============================================================
 
 def _summon_minions(gs, n, now):
+
     w, h = enemy_hitbox_size(0)
 
     for i in range(n):
+
         side = i % 2
 
         x = 30 if side == 0 else WIDTH - 30 - w
@@ -2978,6 +3346,7 @@ def _summon_minions(gs, n, now):
 
 
 def _launch_attack(gs, kind, prog, now):
+
     cfg = boss_cfg()
 
     phase = gs.boss_phase
@@ -3020,7 +3389,7 @@ def _launch_attack(gs, kind, prog, now):
             ang = base + (i - (n - 1) / 2) * spread
             _new_shot(
                 gs, ox - 14, oy - 14,
-                    math.cos(ang) * speed, math.sin(ang) * speed
+                math.cos(ang) * speed, math.sin(ang) * speed
             )
 
     elif kind == 'homing':
@@ -3032,11 +3401,12 @@ def _launch_attack(gs, kind, prog, now):
         base = math.atan2(py - oy, px - ox)
 
         for i in range(n):
+
             ang = base + (i - (n - 1) / 2) * 0.55
 
             _new_shot(
                 gs, ox - 14, oy - 14,
-                    math.cos(ang) * speed, math.sin(ang) * speed,
+                math.cos(ang) * speed, math.sin(ang) * speed,
                 homing_until=now + 1800 + 250 * i, speed=speed
             )
 
@@ -3049,6 +3419,7 @@ def _launch_attack(gs, kind, prog, now):
         vy = (9 + 1.2 * (phase - 1)) * pm
 
         for i in range(n):
+
             x = px - 14 if i == 0 else random.randint(40, WIDTH - 70)
 
             gs.boss_meteors.append({
@@ -3074,6 +3445,7 @@ def _launch_attack(gs, kind, prog, now):
         )
 
         for d in direccions:
+
             wx = gs.boss_rect.left - 40 if d == -1 else gs.boss_rect.right
 
             gs.boss_waves.append({
@@ -3099,6 +3471,7 @@ def _launch_attack(gs, kind, prog, now):
 
 
 def _update_dash(gs, now, prog):
+
     gs.boss_x += gs.boss_dash_dir * gs.boss_dash_speed
 
     if random.random() < 0.7:
@@ -3135,6 +3508,7 @@ def _update_dash(gs, now, prog):
 # ===============================================================
 
 def update_boss(gs, player_hitbox):
+
     now = pygame.time.get_ticks()
 
     cfg = boss_cfg()
@@ -3150,9 +3524,9 @@ def update_boss(gs, player_hitbox):
     charging = (gs.boss_pending is not None or gs.boss_burst is not None)
 
     if (
-            cfg['platform_damage']
-            and not gs.boss_platforms_deteriorated
-            and gs.boss_hp <= gs.boss_platform_damage_hp
+        cfg['platform_damage']
+        and not gs.boss_platforms_deteriorated
+        and gs.boss_hp <= gs.boss_platform_damage_hp
     ):
         deteriorate_boss_platforms(gs)
 
@@ -3169,6 +3543,7 @@ def update_boss(gs, player_hitbox):
     oy = gs.boss_rect.top + 70
 
     if gs.boss_after_roar and now >= gs.boss_phase_until and not platform_special:
+
         gs.boss_after_roar = False
         gs.boss_walking = True
         gs.boss_next_action = now + gs.boss_walk_time
@@ -3182,6 +3557,7 @@ def update_boss(gs, player_hitbox):
         else:
 
             if now >= gs.boss_next_action and now >= gs.boss_stun_until:
+
                 gs.boss_walking = not gs.boss_walking
 
                 gs.boss_next_action = now + (
@@ -3189,11 +3565,12 @@ def update_boss(gs, player_hitbox):
                 )
 
             if (
-                    gs.boss_walking
-                    and not in_roar
-                    and not charging
-                    and now >= gs.boss_stun_until
+                gs.boss_walking
+                and not in_roar
+                and not charging
+                and now >= gs.boss_stun_until
             ):
+
                 speed = (gs.boss_speed + 1.2 * prog) * cfg['walk'] * (1 + 0.35 * (phase - 1))
 
                 gs.boss_x += gs.boss_dir * speed
@@ -3210,11 +3587,11 @@ def update_boss(gs, player_hitbox):
         gs.boss_edge_choice_done = False
 
     if (
-            (at_left or at_right)
-            and not platform_special
-            and not gs.boss_dashing
-            and now >= gs.boss_stun_until
-            and not gs.boss_edge_choice_done
+        (at_left or at_right)
+        and not platform_special
+        and not gs.boss_dashing
+        and now >= gs.boss_stun_until
+        and not gs.boss_edge_choice_done
     ):
 
         gs.boss_edge_choice_done = True
@@ -3235,10 +3612,10 @@ def update_boss(gs, player_hitbox):
     gs.boss_rect.x = int(gs.boss_x)
 
     if (
-            not in_roar
-            and not gs.boss_dashing
-            and gs.boss_burst is None
-            and now >= gs.boss_stun_until
+        not in_roar
+        and not gs.boss_dashing
+        and gs.boss_burst is None
+        and now >= gs.boss_stun_until
     ):
 
         if gs.boss_pending is None and now >= gs.boss_next_shot:
@@ -3280,7 +3657,7 @@ def update_boss(gs, player_hitbox):
 
         _new_shot(
             gs, ox - 14, oy - 14,
-                math.cos(ang) * speed, math.sin(ang) * speed
+            math.cos(ang) * speed, math.sin(ang) * speed
         )
 
         b['left'] -= 1
@@ -3292,6 +3669,7 @@ def update_boss(gs, player_hitbox):
     for shot in gs.boss_shots[:]:
 
         if shot['homing_until'] > now:
+
             dx = px - (shot['x'] + 14)
             dy = py - (shot['y'] + 14)
 
@@ -3313,10 +3691,10 @@ def update_boss(gs, player_hitbox):
             )
 
         if (
-                shot['rect'].right < -40
-                or shot['rect'].left > WIDTH + 40
-                or shot['rect'].top > HEIGHT + 40
-                or shot['rect'].bottom < -80
+            shot['rect'].right < -40
+            or shot['rect'].left > WIDTH + 40
+            or shot['rect'].top > HEIGHT + 40
+            or shot['rect'].bottom < -80
         ):
             gs.boss_shots.remove(shot)
 
@@ -3361,8 +3739,8 @@ def update_boss(gs, player_hitbox):
     if player_hitbox.colliderect(gs.boss_rect) and now >= gs.boss_invuln_until:
 
         if (
-                gs.velocity_y > 0
-                and player_hitbox.bottom <= gs.boss_rect.top + 35
+            gs.velocity_y > 0
+            and player_hitbox.bottom <= gs.boss_rect.top + 35
         ):
 
             dmg = getattr(gs, 'boss_damage', 1)
@@ -3407,6 +3785,7 @@ def update_boss(gs, player_hitbox):
 # ===============================================================
 
 def _boss_tinted(idx, d, img, phase):
+
     key = (idx, d, phase)
 
     if key not in _boss_tint_cache:
@@ -3418,6 +3797,7 @@ def _boss_tinted(idx, d, img, phase):
 
 
 def draw_dash_warning(gs, now):
+
     d = gs.boss_dash_dir
 
     if d > 0:
@@ -3452,6 +3832,7 @@ def draw_dash_warning(gs, now):
 
 
 def draw_boss(gs):
+
     now = pygame.time.get_ticks()
 
     phase = gs.boss_phase
@@ -3486,6 +3867,7 @@ def draw_boss(gs):
             screen.blit(shot_texture, m['rect'])
 
     for w in gs.boss_waves:
+
         r = w['rect']
 
         pygame.draw.polygon(
@@ -3520,11 +3902,11 @@ def draw_boss(gs):
     charging = (gs.boss_pending is not None)
 
     boss_is_stationary = (
-            not gs.boss_walking
-            or gs.boss_platform_event in (
-                "pre_roar", "special_attack", "return_warning"
-            )
-            or in_roar
+        not gs.boss_walking
+        or gs.boss_platform_event in (
+            "pre_roar", "special_attack", "return_warning"
+        )
+        or in_roar
     )
 
     if boss_is_stationary:
@@ -3550,9 +3932,9 @@ def draw_boss(gs):
         )
 
     if not (
-            now < gs.boss_invuln_until
-            and not in_roar
-            and (now // 100) % 2 == 0
+        now < gs.boss_invuln_until
+        and not in_roar
+        and (now // 100) % 2 == 0
     ):
 
         d = 1 if gs.boss_dir > 0 else 0
@@ -3578,6 +3960,7 @@ def draw_boss(gs):
         if gs.boss_dashing:
 
             for k in (3, 2, 1):
+
                 ghost = img.copy()
                 ghost.set_alpha(40 + 15 * (3 - k))
 
@@ -3586,6 +3969,7 @@ def draw_boss(gs):
         screen.blit(img, (bx, by))
 
     if charging:
+
         mark = _font(60, True).render('!', True, (255, 60, 60))
 
         screen.blit(
@@ -3595,6 +3979,7 @@ def draw_boss(gs):
         )
 
     if now < gs.boss_platform_roar_until:
+
         roar_text = _font(72, True).render('RUGIT!', True, (255, 50, 50))
 
         roar_x = WIDTH // 2 - roar_text.get_width() // 2 + random.randint(-5, 5)
@@ -3604,6 +3989,7 @@ def draw_boss(gs):
 
 
 def draw_boss_bar(gs):
+
     now = pygame.time.get_ticks()
 
     phase = gs.boss_phase
@@ -3637,6 +4023,7 @@ def draw_boss_bar(gs):
     pygame.draw.rect(screen, color, (x, y, int(bar_w * vida), bar_h))
 
     for f in cfg['phase_at']:
+
         tick_x = x + int(bar_w * f)
 
         pygame.draw.line(screen, WHITE, (tick_x, y - 3), (tick_x, y + bar_h + 3), 2)
@@ -3650,6 +4037,7 @@ def draw_boss_bar(gs):
     screen.blit(label, (WIDTH // 2 - label.get_width() // 2, y + bar_h + 6))
 
     if now < gs.boss_phase_until and phase in BOSS_PHASE_TEXT:
+
         txt = _font(72, True).render(BOSS_PHASE_TEXT[phase], True, color)
 
         screen.blit(
@@ -3684,6 +4072,7 @@ def ease_out_bounce(x):
 
 
 def start_boss_death(gs, now):
+
     gs.boss_dying = True
     gs.boss_death_start = now
     gs.boss_death_end = now + BOSS_DEATH_MS
@@ -3723,23 +4112,21 @@ def start_boss_death(gs, now):
 
 
 def update_boss_death(gs, now):
+
     t = now - gs.boss_death_start
 
     r = gs.boss_rect
 
     update_boss_platform_debris(gs)
 
-    if not MUTED['on']:
-        try:
-            pygame.mixer.music.set_volume(max(0.0, 1 - t / BOSS_DEATH_MS))
-        except pygame.error:
-            pass
+    MUSIC['fade'] = max(0.0, 1 - t / BOSS_DEATH_MS)
 
     if t < BOSS_DEATH_BLAST:
 
         gs.boss_shake_until = now + 80
 
         if now >= gs.boss_death_next_boom:
+
             x = random.randint(r.left, r.right)
             y = random.randint(r.top, r.bottom)
 
@@ -3773,6 +4160,7 @@ def update_boss_death(gs, now):
         play_sfx('hit')
 
     if BOSS_DEATH_BLAST <= t < BOSS_DEATH_BLAST + 900 and random.random() < 0.8:
+
         spawn_particles(
             random.randint(r.left, r.right), random.randint(r.top, r.bottom),
             (230, 200, 255), 2, speed=2.5, life=900, size=5,
@@ -3781,6 +4169,7 @@ def update_boss_death(gs, now):
 
 
 def draw_boss_dying(gs, now):
+
     t = now - gs.boss_death_start
 
     fade = 1.0
@@ -3807,6 +4196,7 @@ def draw_boss_dying(gs, now):
     scale = 0.6 + 0.4 * fade
 
     if fade < 1.0:
+
         img = pygame.transform.scale(
             img,
             (max(1, int(img.get_width() * scale)), max(1, int(img.get_height() * scale)))
@@ -3825,9 +4215,11 @@ def draw_boss_dying(gs, now):
 
 
 def draw_boss_death_overlay(gs, now):
+
     t = now - gs.boss_death_start
 
     if 500 < t < BOSS_DEATH_MS - 700:
+
         a = _clamp01((t - 500) / 400) * _clamp01((BOSS_DEATH_MS - 700 - t) / 300)
 
         txt = _font(80, True).render('BOSS DERROTAT!', True, GOLD)
@@ -3846,6 +4238,7 @@ def draw_boss_death_overlay(gs, now):
     flash = 1 - abs(t - BOSS_DEATH_BLAST) / 450
 
     if flash > 0:
+
         ov = pygame.Surface((WIDTH, HEIGHT))
         ov.fill(WHITE)
         ov.set_alpha(int(255 * flash))
@@ -3854,6 +4247,7 @@ def draw_boss_death_overlay(gs, now):
     fade_start = BOSS_DEATH_MS - 700
 
     if t > fade_start:
+
         ov = pygame.Surface((WIDTH, HEIGHT))
         ov.fill(BLACK)
         ov.set_alpha(int(255 * _clamp01((t - fade_start) / 700)))
@@ -3861,7 +4255,9 @@ def draw_boss_death_overlay(gs, now):
 
 
 def apply_boss_shake(gs):
+
     if gs.is_boss and pygame.time.get_ticks() < gs.boss_shake_until:
+
         frame = screen.copy()
 
         screen.fill(BLACK)
@@ -3877,6 +4273,7 @@ MENU_OPTIONS = ['JUGAR', 'BOTIGA', 'CRÈDITS', 'AJUDA', 'SORTIR']
 
 
 def get_menu_buttons():
+
     start_y = 365
     gap = 62
 
@@ -3886,7 +4283,42 @@ def get_menu_buttons():
     ]
 
 
+def get_medals_button():
+    """Icona de baix a la dreta: obre la pantalla de medalles."""
+
+    return pygame.Rect(WIDTH - 88, HEIGHT - 108, 68, 68)
+
+
+MEDALS_TOTAL = len(DIFFICULTY_ORDER) * 2      # 6 medalles
+
+
+def count_medals():
+    """Quantes medalles tens (de 6)."""
+
+    return sum(
+        (1 if MEDALS[k]['completed'] else 0) + (1 if MEDALS[k]['no_deaths'] else 0)
+        for k in DIFFICULTY_ORDER
+    )
+
+
+def owned_medals():
+    """Medalles que ja tens: llista de (dificultat, és_top), en ordre."""
+
+    out = []
+
+    for key in DIFFICULTY_ORDER:
+
+        if MEDALS[key]['completed']:
+            out.append((key, False))
+
+        if MEDALS[key]['no_deaths']:
+            out.append((key, True))
+
+    return out
+
+
 def menu_play_label(used_characters):
+
     has_run = PROGRESS['level'] is not None or bool(used_characters)
 
     if not has_run:
@@ -3907,7 +4339,26 @@ def return_to_menu(gs, used_characters):
     gs.start_time = time.time()
 
 
+def draw_menu_medals(now):
+    """Les medalles que has aconseguit, a dalt a l'esquerra del menú."""
+
+    size = 46
+    gap = 8
+
+    x = 18 + size // 2
+    y = 18 + size // 2 + 6
+
+    for key, top in owned_medals():
+
+        draw_medal(screen, x, y, size, key, top, True, now)
+
+        x += size + gap
+
+
 def show_start_menu(play_label='JUGAR', has_run=False):
+
+    now = pygame.time.get_ticks()
+
     imprimir_pantalla_fons('assets/menu.png')
 
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -3967,6 +4418,41 @@ def show_start_menu(play_label='JUGAR', has_run=False):
 
     screen.blit(dl, (WIDTH // 2 - dl.get_width() // 2, 322))
 
+    # --- medalles aconseguides (a dalt a l'esquerra) ---
+    draw_menu_medals(now)
+
+    # --- icona de medalles (baix a la dreta) ---
+    mb = get_medals_button()
+
+    hover = mb.collidepoint(mouse_pos)
+
+    surf = pygame.Surface(mb.size, pygame.SRCALPHA)
+    surf.fill((45, 45, 45, 220) if hover else (0, 0, 0, 175))
+    screen.blit(surf, mb.topleft)
+
+    pygame.draw.rect(screen, GOLD, mb, 4 if hover else 2, border_radius=14)
+
+    draw_medal(screen, mb.centerx, mb.centery + 3, 46, 'normal', True, True, now)
+
+    cnt = _font(18, True).render(f'{count_medals()}/{MEDALS_TOTAL}', True, GOLD)
+    screen.blit(cnt, (mb.centerx - cnt.get_width() // 2, mb.bottom + 4))
+
+    if hover:
+
+        tip = _font(20, True).render('Medalles (M)', True, WHITE)
+
+        tw, th = tip.get_width() + 20, tip.get_height() + 10
+
+        tx = mb.x - tw - 10
+        ty = mb.centery - th // 2
+
+        box = pygame.Surface((tw, th), pygame.SRCALPHA)
+        box.fill((0, 0, 0, 205))
+        screen.blit(box, (tx, ty))
+
+        pygame.draw.rect(screen, GOLD, (tx, ty, tw, th), 1, border_radius=6)
+        screen.blit(tip, (tx + 10, ty + 5))
+
     if has_run:
         rh = _font(20, True).render('R = començar una partida nova', True, YELLOW)
         screen.blit(rh, (WIDTH // 2 - rh.get_width() // 2, HEIGHT - 52))
@@ -3977,7 +4463,7 @@ def show_start_menu(play_label='JUGAR', has_run=False):
 
     if MUTED['on']:
         mt = _font(22, True).render('MUT (N)', True, (255, 120, 120))
-        screen.blit(mt, (20, 20))
+        screen.blit(mt, (20, 82))
 
     small_font = _font(20, True)
 
@@ -3993,12 +4479,114 @@ def show_start_menu(play_label='JUGAR', has_run=False):
 
 
 # ===============================================================
-# PANTALLA DE DIFICULTAT
+# COM OBTENIR LES MEDALLES
+# ===============================================================
+
+def wrap_text(text, font, max_w):
+
+    words = text.split(' ')
+
+    lines = []
+    cur = ''
+
+    for w in words:
+
+        test = (cur + ' ' + w).strip()
+
+        if font.size(test)[0] <= max_w:
+            cur = test
+        else:
+            lines.append(cur)
+            cur = w
+
+    if cur:
+        lines.append(cur)
+
+    return lines
+
+
+def show_medals_help():
+    """Pantalla de medalles: 6 medalles (3 dificultats x 2) i com aconseguir-les."""
+
+    now = pygame.time.get_ticks()
+
+    screen.fill(C4)
+
+    imprimir_pantalla_fons('assets/menu.png')
+
+    panel = pygame.Surface((WIDTH - 120, HEIGHT - 70), pygame.SRCALPHA)
+    panel.fill((0, 0, 0, 215))
+    screen.blit(panel, (60, 40))
+
+    title = _font(54, True).render('MEDALLES', True, GOLD)
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 48))
+
+    sub = _font(22).render(
+        f'{count_medals()} de {MEDALS_TOTAL} aconseguides  -  derrota el Boss Final per guanyar-ne',
+        True, (215, 220, 235)
+    )
+    screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 108))
+
+    col_x = (232, 512, 792)
+
+    rows = (
+        (False, 'MEDALLA', 228, 'Derrota el Boss Final'),
+        (True, 'MEDALLA TOP', 462,
+         'Derrota el Boss Final sense que cap personatge hagi mort (reviure també compta com a mort)'),
+    )
+
+    font_d = _font(18)
+
+    for ci, key in enumerate(DIFFICULTY_ORDER):
+
+        cfg = DIFFICULTY_SETTINGS[key]
+        m = MEDALS[key]
+        cx = col_x[ci]
+
+        nm = _font(34, True).render(cfg['nom'], True, cfg['color'])
+        screen.blit(nm, (cx - nm.get_width() // 2, 138))
+
+        for is_top, label, cy, desc in rows:
+
+            got = m['no_deaths'] if is_top else m['completed']
+
+            draw_medal(screen, cx, cy, 92, key, is_top, got, now)
+
+            lt = _font(22, True).render(
+                label, True,
+                (GOLD if is_top else (225, 228, 240)) if got else (150, 152, 165)
+            )
+            screen.blit(lt, (cx - lt.get_width() // 2, cy + 54))
+
+            st = _font(20, True).render(
+                'ACONSEGUIDA' if got else 'BLOQUEJADA',
+                True, GREEN if got else (140, 140, 152)
+            )
+            screen.blit(st, (cx - st.get_width() // 2, cy + 80))
+
+            ly = cy + 106
+
+            for line in wrap_text(desc, font_d, 250):
+
+                ds = font_d.render(line, True, (205, 208, 220))
+                screen.blit(ds, (cx - ds.get_width() // 2, ly))
+
+                ly += 22
+
+    hint = _font(22).render('ESC, ENTER o clic = tornar', True, YELLOW)
+    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, 652))
+
+    pygame.display.flip()
+
+
+# ===============================================================
+# PANTALLA DE DIFICULTAT (només els tres noms)
 # ===============================================================
 
 def get_difficulty_cards():
-    card_w = 290
-    card_h = 350
+
+    card_w = 270
+    card_h = 170
     gap = 30
 
     n = len(DIFFICULTY_ORDER)
@@ -4006,12 +4594,13 @@ def get_difficulty_cards():
     x0 = (WIDTH - (n * card_w + (n - 1) * gap)) // 2
 
     return [
-        pygame.Rect(x0 + i * (card_w + gap), 190, card_w, card_h)
+        pygame.Rect(x0 + i * (card_w + gap), 270, card_w, card_h)
         for i in range(n)
     ]
 
 
 def show_difficulty(selected_index):
+
     screen.fill(C4)
 
     imprimir_pantalla_fons('assets/menu.png')
@@ -4022,7 +4611,7 @@ def show_difficulty(selected_index):
 
     title = _font(54).render('Tria la dificultat', True, WHITE)
 
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 90))
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 100))
 
     for i, (key, rect) in enumerate(zip(DIFFICULTY_ORDER, get_difficulty_cards())):
 
@@ -4044,24 +4633,13 @@ def show_difficulty(selected_index):
             border_radius=12
         )
 
-        num = _font(24).render(str(i + 1), True, WHITE)
+        name = _font(50, True).render(cfg['nom'], True, cfg['color'])
 
-        screen.blit(num, (rect.x + 14, rect.y + 10))
-
-        name = _font(42, True).render(cfg['nom'], True, cfg['color'])
-
-        screen.blit(name, (rect.centerx - name.get_width() // 2, rect.y + 40))
-
-        for j, line in enumerate(cfg['desc']):
-            is_boss_line = (j == len(cfg['desc']) - 1)
-
-            t = _font(22 if is_boss_line else 24, is_boss_line).render(
-                line, True, cfg['color'] if is_boss_line else WHITE
-            )
-
-            screen.blit(
-                t, (rect.centerx - t.get_width() // 2, rect.y + 125 + j * 42)
-            )
+        screen.blit(
+            name,
+            (rect.centerx - name.get_width() // 2,
+             rect.centery - name.get_height() // 2)
+        )
 
     help_text = _font(26).render(
         'A/D o ratolí = triar    ENTER o clic = començar    ESC = enrere',
@@ -4069,7 +4647,7 @@ def show_difficulty(selected_index):
         WHITE
     )
 
-    screen.blit(help_text, (WIDTH // 2 - help_text.get_width() // 2, HEIGHT - 80))
+    screen.blit(help_text, (WIDTH // 2 - help_text.get_width() // 2, HEIGHT - 110))
 
     pygame.display.flip()
 
@@ -4079,6 +4657,7 @@ def show_difficulty(selected_index):
 # ===============================================================
 
 def show_shop(char_index, ability_index, message, message_ok):
+
     screen.fill(C4)
 
     imprimir_pantalla_fons('assets/menu.png')
@@ -4108,6 +4687,7 @@ def show_shop(char_index, ability_index, message, message_ok):
     card_y = 112
 
     for i, ch in enumerate(CHARACTERS):
+
         x = start_x + i * (card_w + gap)
 
         is_sel = (i == char_index)
@@ -4180,6 +4760,7 @@ def show_shop(char_index, ability_index, message, message_ok):
         screen.blit(desc, (row_x + 18, y + 38))
 
         for k in range(max_level):
+
             cx = row_x + row_w - 290 + k * 30
             cy = y + 20
 
@@ -4214,6 +4795,7 @@ def show_shop(char_index, ability_index, message, message_ok):
         )
 
     if message:
+
         msg = _font(26, True).render(
             message, True, GREEN if message_ok else (255, 90, 90)
         )
@@ -4247,6 +4829,7 @@ def get_select_card_rects():
 
 
 def show_character_select(selected, used_characters):
+
     screen.fill(C4)
 
     imprimir_pantalla_fons('assets/menu.png')
@@ -4338,6 +4921,7 @@ def show_character_select(selected, used_characters):
         )
 
         if used:
+
             used_text = small_font.render('UTILITZAT', True, RED)
 
             screen.blit(
@@ -4370,11 +4954,11 @@ def get_death_select_card_rects(used_characters):
     total = len(disponibles) * card_w + (len(disponibles) - 1) * gap
     start_x = (WIDTH - total) // 2
     card_y = 190
-    return [(ch_idx, pygame.Rect(start_x + pos * (card_w + gap), card_y, card_w, card_h)) for pos, ch_idx in
-            enumerate(disponibles)]
+    return [(ch_idx, pygame.Rect(start_x + pos * (card_w + gap), card_y, card_w, card_h)) for pos, ch_idx in enumerate(disponibles)]
 
 
 def show_death_character_select(selected, used_characters):
+
     screen.fill(C4)
 
     imprimir_pantalla_fons('assets/menu.png')
@@ -4486,6 +5070,7 @@ def show_death_character_select(selected, used_characters):
 # ===============================================================
 
 def show_pause(snapshot):
+
     screen.blit(snapshot, (0, 0))
 
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -4497,8 +5082,8 @@ def show_pause(snapshot):
     screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 110))
 
     for i, line in enumerate((
-            'P o ESC = continuar',
-            'N = silenci' + (' (activat)' if MUTED['on'] else '')
+        'P o ESC = continuar',
+        'N = silenci' + (' (activat)' if MUTED['on'] else '')
     )):
         t = _font(32).render(line, True, YELLOW)
         screen.blit(
@@ -4514,7 +5099,9 @@ def show_pause(snapshot):
 # ===============================================================
 
 def draw_centered_lines(lines, font, start_y, step):
+
     for i, (text, color) in enumerate(lines):
+
         surf = font.render(text, True, color)
 
         screen.blit(
@@ -4524,6 +5111,7 @@ def draw_centered_lines(lines, font, start_y, step):
 
 
 def show_credits():
+
     screen.fill(C4)
 
     imprimir_pantalla_fons('assets/fondocredits.png')
@@ -4548,6 +5136,7 @@ def show_credits():
 
 
 def show_A():
+
     screen.fill(C4)
 
     imprimir_pantalla_fons('assets/fondo12.png')
@@ -4572,14 +5161,15 @@ def show_A():
             ('Canviar de personatge = 1, 2, 3 o TAB', WHITE),
             ('Entre nivells: B = botiga de millores', WHITE),
             ('Dificultat: en prémer JUGAR (o D al menú)', WHITE),
+            ('Medalles: icona de baix a la dreta del menú (o M)', WHITE),
             ('Hi ha doble salt', WHITE),
             ('Tocar un enemic de costat = mort', WHITE),
             ('Pokeball petita = 1 punt, Ultraball = 2 punts', WHITE),
             ('Gasta els punts a la BOTIGA del menú', WHITE),
         ],
         font,
-        20,
-        34
+        14,
+        33
     )
 
     pygame.display.flip()
@@ -4588,6 +5178,7 @@ def show_A():
 def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
                         level, points_gained=0, points_total=0,
                         best_time=None, is_record=False):
+
     screen.fill(BLACK)
 
     font = _font(50)
@@ -4627,7 +5218,14 @@ def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
 CONFETTI_COLORS = ((255, 215, 0), (255, 90, 90), (90, 200, 255), (120, 255, 140), (255, 140, 255))
 
 
-def show_final_screen(time_taken, best_time=None, is_record=False, t=9999):
+def show_final_screen(time_taken, best_time=None, is_record=False, t=9999, medal=None):
+    """
+    Pantalla de victòria. 'medal' = {'key', 'top', 'new_comp', 'new_top'}
+    (la dificultat jugada, si ha estat sense morts i quines medalles són noves).
+    """
+
+    now = pygame.time.get_ticks()
+
     screen.fill((8, 8, 25))
 
     if random.random() < 0.8:
@@ -4648,7 +5246,51 @@ def show_final_screen(time_taken, best_time=None, is_record=False, t=9999):
         (max(1, int(title.get_width() * sc)), max(1, int(title.get_height() * sc)))
     )
 
-    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 150 - title.get_height() // 2))
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 100 - title.get_height() // 2))
+
+    # --- medalles guanyades (apareixen amb un rebot) ---
+    if medal:
+
+        key = medal['key']
+
+        slots = (
+            (False, True, medal['new_comp'], 'MEDALLA', -110),
+            (True, medal['top'], medal['new_top'], 'MEDALLA TOP', 110),
+        )
+
+        for i, (is_top, got, is_new, name, dx) in enumerate(slots):
+
+            k = _clamp01((t - 700 - i * 350) / 800)
+
+            if k <= 0:
+                continue
+
+            pop = max(0.05, ease_out_bounce(k))
+
+            cx = WIDTH // 2 + dx
+
+            draw_medal(screen, cx, 235, int(100 * pop), key, is_top, got, now)
+
+            if k < 0.6:
+                continue
+
+            if got:
+
+                label = _font(24, True).render(name, True, GOLD if is_top else (225, 228, 240))
+
+            else:
+
+                label = _font(18, True).render('TOP: que no mori ningú', True, (150, 150, 165))
+
+            screen.blit(label, (cx - label.get_width() // 2, 300))
+
+            if got and is_new:
+
+                a = 0.6 + 0.4 * math.sin(now / 160)
+
+                tag = _font(22, True).render('NOVA!', True, (int(120 * a), int(255 * a), int(140 * a)))
+
+                screen.blit(tag, (cx - tag.get_width() // 2, 160))
 
     if best_time is None:
         record_line = ('', WHITE)
@@ -4666,16 +5308,18 @@ def show_final_screen(time_taken, best_time=None, is_record=False, t=9999):
     ]
 
     for i, (text, color) in enumerate(lines):
-        surf = _font(44).render(text, True, color)
 
-        surf.set_alpha(int(255 * _clamp01((t - 700 - i * 200) / 300)))
+        surf = _font(40).render(text, True, color)
 
-        screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, 260 + i * 62))
+        surf.set_alpha(int(255 * _clamp01((t - 1500 - i * 200) / 300)))
+
+        screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, 350 + i * 52))
 
     pygame.display.flip()
 
 
 def show_game_over(bg, t, info):
+
     screen.blit(bg, (0, 0))
 
     red = pygame.Surface((WIDTH, HEIGHT))
@@ -4757,6 +5401,7 @@ def show_game_over(bg, t, info):
         lines.append(("Gasta'ls a la botiga i torna-ho a provar!", (255, 230, 150)))
 
     for k, (text, color) in enumerate(lines):
+
         surf = _font(30).render(text, True, color)
 
         surf.set_alpha(int(255 * _clamp01((t - 1700 - k * 250) / 300)))
@@ -4764,6 +5409,7 @@ def show_game_over(bg, t, info):
         screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, 465 + k * 40))
 
     if t >= GO_INPUT_MS:
+
         a = _clamp01((t - GO_INPUT_MS) / 300) * (0.65 + 0.35 * math.sin(t / 260))
 
         hint = _font(28, True).render(
@@ -4782,6 +5428,7 @@ def show_game_over(bg, t, info):
 # ===============================================================
 
 def cycle_selection(current, step, used_characters):
+
     disponibles = [
         i for i in range(len(CHARACTERS)) if i not in used_characters
     ]
@@ -4795,17 +5442,24 @@ def cycle_selection(current, step, used_characters):
 
 
 def play_music(path, loop=False):
+
     try:
         pygame.mixer.music.load(music_file(path))
     except (pygame.error, FileNotFoundError):
         return
 
+    MUSIC['track'] = os.path.splitext(os.path.basename(path))[0]
+    MUSIC['fade'] = 1.0
+
     apply_volume()
 
     pygame.mixer.music.play(-1 if loop else 0)
 
+    apply_volume()
+
 
 JUMP_KEYS = (pygame.K_SPACE, pygame.K_UP, pygame.K_w)
+
 
 # ===============================================================
 # PANTALLA DE CÀRREGA I ERRORS
@@ -4815,6 +5469,7 @@ LOAD_STEPS = 7
 
 
 def draw_loading(msg, step):
+
     screen.fill((10, 20, 45))
 
     big = pygame.font.Font(None, 56)
@@ -4838,6 +5493,7 @@ def draw_loading(msg, step):
 
 
 async def load_all():
+
     draw_loading('Iniciant', 0)
 
     await asyncio.sleep(0.05)
@@ -4845,6 +5501,7 @@ async def load_all():
     step = 0
 
     for msg in load_textures():
+
         draw_loading(msg, step)
 
         step += 1
@@ -4853,6 +5510,7 @@ async def load_all():
 
 
 def show_fatal(err):
+
     import textwrap
 
     screen.fill((45, 0, 0))
@@ -4874,6 +5532,7 @@ def show_fatal(err):
 
 
 async def main():
+
     try:
 
         await load_all()
@@ -4898,6 +5557,7 @@ async def main():
 # ===============================================================
 
 async def game():
+
     clock = pygame.time.Clock()
 
     running = True
@@ -4925,6 +5585,7 @@ async def game():
     final_time = 0
     final_best = None
     final_is_record = False
+    final_medal = None
 
     pause_snapshot = None
     pause_started = 0
@@ -4956,6 +5617,8 @@ async def game():
 
         current_time = pygame.time.get_ticks()
 
+        sync_music_volume()
+
         # =====================================================
         # MENU
         # =====================================================
@@ -4974,12 +5637,17 @@ async def game():
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_n:
                     toggle_mute()
 
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                    game_state = 'medals'
+
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_d:
+
                     k = DIFFICULTY_ORDER.index(DIFFICULTY['key'])
 
                     DIFFICULTY['key'] = DIFFICULTY_ORDER[(k + 1) % len(DIFFICULTY_ORDER)]
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+
                     reset_progress()
                     used_characters.clear()
 
@@ -4993,7 +5661,11 @@ async def game():
 
                     buttons = get_menu_buttons()
 
-                    if buttons[0].collidepoint(event.pos):
+                    if get_medals_button().collidepoint(event.pos):
+
+                        game_state = 'medals'
+
+                    elif buttons[0].collidepoint(event.pos):
 
                         diff_index = DIFFICULTY_ORDER.index(DIFFICULTY['key'])
 
@@ -5022,6 +5694,27 @@ async def game():
                     elif buttons[4].collidepoint(event.pos):
 
                         running = False
+
+        # =====================================================
+        # COM OBTENIR LES MEDALLES
+        # =====================================================
+
+        elif game_state == 'medals':
+
+            show_medals_help()
+
+            for event in pygame.event.get():
+
+                if event.type == pygame.QUIT:
+                    running = False
+
+                if event.type == pygame.KEYDOWN and event.key in (
+                    pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_m
+                ):
+                    game_state = 'menu'
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    game_state = 'menu'
 
         # =====================================================
         # DIFICULTAT
@@ -5069,12 +5762,13 @@ async def game():
                         game_state = 'menu'
 
                     for num_key, idx in (
-                            (pygame.K_1, 0), (pygame.K_2, 1), (pygame.K_3, 2)
+                        (pygame.K_1, 0), (pygame.K_2, 1), (pygame.K_3, 2)
                     ):
                         if event.key == num_key and idx < n_diff:
                             diff_index = idx
 
                 if confirm:
+
                     DIFFICULTY['key'] = DIFFICULTY_ORDER[diff_index]
 
                     selected = 0
@@ -5150,6 +5844,7 @@ async def game():
             ]
 
             if not disponibles:
+
                 used_characters.clear()
 
                 selected = 0
@@ -5182,13 +5877,15 @@ async def game():
                             sprite_index = 0
                             last_change_frame_time = current_time
 
+                            play_sfx('iniciar_partida')
+
                             await fade_out()
                             game_state = 'playing'
                             gs.reset(gs.level)
                             gs.start_time = time.time()
                             prev_on_ground = True
                             start_fade_in()
-                            play_music('assets/musica1.mp3')
+                            play_music('assets/lluita.mp3')
                             break
 
                 if event.type == pygame.KEYDOWN:
@@ -5200,20 +5897,21 @@ async def game():
                         selected = cycle_selection(selected, 1, used_characters)
 
                     for num_key, idx in (
-                            (pygame.K_1, 0),
-                            (pygame.K_2, 1),
-                            (pygame.K_3, 2)
+                        (pygame.K_1, 0),
+                        (pygame.K_2, 1),
+                        (pygame.K_3, 2)
                     ):
                         if (
-                                event.key == num_key
-                                and len(CHARACTERS) > idx
-                                and idx not in used_characters
+                            event.key == num_key
+                            and len(CHARACTERS) > idx
+                            and idx not in used_characters
                         ):
                             selected = idx
 
                     if event.key == pygame.K_RETURN:
 
                         if selected not in used_characters:
+
                             player_char = CHARACTERS[selected]
 
                             ACTIVE['nom'] = player_char.nom
@@ -5221,6 +5919,8 @@ async def game():
                             sprite_index = 0
 
                             last_change_frame_time = current_time
+
+                            play_sfx('iniciar_partida')
 
                             await fade_out()
 
@@ -5234,9 +5934,10 @@ async def game():
 
                             start_fade_in()
 
-                            play_music('assets/musica1.mp3')
+                            play_music('assets/lluita.mp3')
 
                     if event.key == pygame.K_ESCAPE:
+
                         return_to_menu(gs, used_characters)
                         game_state = 'menu'
 
@@ -5251,6 +5952,7 @@ async def game():
             ]
 
             if not disponibles:
+
                 selected = 0
                 death_selected = 0
 
@@ -5294,7 +5996,7 @@ async def game():
                             game_state = 'playing'
                             prev_on_ground = True
                             start_fade_in()
-                            play_music('assets/musica1.mp3')
+                            play_music('assets/lluita.mp3')
                             break
 
                 if event.type == pygame.KEYDOWN:
@@ -5336,9 +6038,10 @@ async def game():
 
                         start_fade_in()
 
-                        play_music('assets/musica1.mp3')
+                        play_music('assets/lluita.mp3')
 
                     if event.key == pygame.K_ESCAPE:
+
                         selected = 0
                         death_selected = 0
 
@@ -5362,6 +6065,7 @@ async def game():
                     running = False
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+
                     return_to_menu(gs, used_characters)
                     game_state = 'menu'
 
@@ -5379,6 +6083,7 @@ async def game():
                     running = False
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+
                     return_to_menu(gs, used_characters)
                     game_state = 'menu'
 
@@ -5443,7 +6148,7 @@ async def game():
 
             show_final_screen(
                 final_time, final_best, final_is_record,
-                pygame.time.get_ticks() - final_start
+                pygame.time.get_ticks() - final_start, final_medal
             )
 
             for event in pygame.event.get():
@@ -5455,6 +6160,7 @@ async def game():
 
                     # Tornar a intentar amb l'Espai
                     if event.key == pygame.K_SPACE:
+
                         gs.reset(BOSS_LEVEL)
 
                         gs.start_time = time.time()
@@ -5465,9 +6171,10 @@ async def game():
 
                         start_fade_in()
 
-                        play_music('assets/musica1.mp3')
+                        play_music('assets/lluita.mp3')
 
                     if event.key == pygame.K_ESCAPE:
+
                         return_to_menu(gs, used_characters)
 
                         game_state = 'menu'
@@ -5524,7 +6231,6 @@ async def game():
             max_fall = MAX_FALL_SPEED - 1.5 * lv('planeig')
 
             gs.boss_damage = 1 + lv('mal_boss')
-            gs.enemy_bonus = lv('mal_boss')
             gs.stomp_bounce = 2 * lv('rebot')
 
             for event in pygame.event.get():
@@ -5557,10 +6263,10 @@ async def game():
                             gs.jump_buffer_until = current_time + JUMP_BUFFER_MS
 
                     if (
-                            event.key in ATTACK_KEYS
-                            and gs.alive
-                            and attacks_unlocked(nom)
-                            and current_time >= gs.attack_ready_at
+                        event.key in ATTACK_KEYS
+                        and gs.alive
+                        and attacks_unlocked(nom)
+                        and current_time >= gs.attack_ready_at
                     ):
                         fire_basic(gs, nom, -1 if direccio == 1 else 1)
 
@@ -5569,9 +6275,9 @@ async def game():
                         play_sfx('atac')
 
                     if (
-                            event.key in SPECIAL_KEYS
-                            and gs.alive
-                            and current_time >= gs.special_ready_at
+                        event.key in SPECIAL_KEYS
+                        and gs.alive
+                        and current_time >= gs.special_ready_at
                     ):
                         cd = fire_special(gs, nom, -1 if direccio == 1 else 1)
 
@@ -5582,9 +6288,9 @@ async def game():
                             play_sfx('atac')
 
                     if (
-                            event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_TAB)
-                            and gs.alive
-                            and current_time >= gs.switch_ready_at
+                        event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_TAB)
+                        and gs.alive
+                        and current_time >= gs.switch_ready_at
                     ):
                         if event.key == pygame.K_TAB:
                             target = cycle_selection(selected, 1, used_characters)
@@ -5592,9 +6298,9 @@ async def game():
                             target = event.key - pygame.K_1
 
                         if (
-                                target != selected
-                                and 0 <= target < len(CHARACTERS)
-                                and target not in used_characters
+                            target != selected
+                            and 0 <= target < len(CHARACTERS)
+                            and target not in used_characters
                         ):
                             old_nom = player_char.nom
 
@@ -5626,6 +6332,7 @@ async def game():
                         gs.velocity_y *= JUMP_CUT_FACTOR
 
             if pause_requested:
+
                 pause_snapshot = screen.copy()
                 pause_started = pygame.time.get_ticks()
                 music_pause()
@@ -5636,12 +6343,14 @@ async def game():
             if gs.alive:
 
                 if keys[pygame.K_LEFT] and gs.player_x > 0:
+
                     pokemon_state = "camina"
                     direccio = 1
 
                     gs.player_x -= speed
 
                 if keys[pygame.K_RIGHT] and gs.player_x < WIDTH - PLAYER_SIZE[0]:
+
                     pokemon_state = "camina"
                     direccio = 0
 
@@ -5650,18 +6359,17 @@ async def game():
                 if keys[pygame.K_DOWN]:
                     pokemon_state = "ajupit"
 
-                if keys[pygame.K_s]:
-                    pokemon_state = "ajupit"
-
                 gs.is_ducking = keys[pygame.K_DOWN]
 
                 if keys[pygame.K_a] and gs.player_x > 0:
+
                     pokemon_state = "camina"
                     direccio = 1
 
                     gs.player_x -= speed
 
                 if keys[pygame.K_d] and gs.player_x < WIDTH - PLAYER_SIZE[0]:
+
                     pokemon_state = "camina"
                     direccio = 0
 
@@ -5680,9 +6388,9 @@ async def game():
                     for platform_index, platform in enumerate(gs.platforms):
 
                         if (
-                                gs.is_boss
-                                and platform_index > 0
-                                and gs.boss_platform_event != "active"
+                            gs.is_boss
+                            and platform_index > 0
+                            and gs.boss_platform_event != "active"
                         ):
                             continue
 
@@ -5709,6 +6417,7 @@ async def game():
                             break
 
                 if not on_ground:
+
                     gs.velocity_y = min(gs.velocity_y + GRAVITY, max_fall)
 
                     gs.player_y = next_y
@@ -5733,6 +6442,7 @@ async def game():
                 prev_on_ground = on_ground
 
                 if on_ground and gs.jump_buffer_until > current_time:
+
                     gs.velocity_y = jump_str
                     gs.jump_count = 1
                     gs.jump_buffer_until = 0
@@ -5746,42 +6456,15 @@ async def game():
                     gs.player_x, gs.player_y, gs.is_ducking
                 )
 
-                # Imant (Jolteon): les pokeballs properes volen cap al jugador
-                mag = lv('imant')
-
-                if mag:
-
-                    mag_radius = 90 + 70 * mag  # 160 / 230 / 300 px
-                    mag_pull = 4 + 2 * mag  # 6 / 8 / 10 px per frame
-
-                    pcx, pcy = player_hitbox.center
-
-                    for pokeball in gs.pokeballs:
-
-                        dx = pcx - pokeball.centerx
-                        dy = pcy - pokeball.centery
-
-                        dist = math.hypot(dx, dy)
-
-                        if 1 < dist <= mag_radius:
-
-                            step = min(dist, mag_pull)
-
-                            pokeball.centerx += int(round(dx / dist * step))
-                            pokeball.centery += int(round(dy / dist * step))
-
-                            if random.random() < 0.15:
-                                spawn_particles(
-                                    pokeball.centerx, pokeball.centery,
-                                    (120, 200, 255), 1, speed=0.8, life=250,
-                                    size=3, gravity=0
-                                )
+                magnet = player_hitbox.inflate(
+                    30 * lv('imant'), 30 * lv('imant')
+                )
 
                 for idx in range(len(gs.pokeballs) - 1, -1, -1):
 
                     pokeball = gs.pokeballs[idx]
 
-                    if player_hitbox.colliderect(pokeball):
+                    if magnet.colliderect(pokeball):
 
                         value = gs.pokeball_values[idx]
 
@@ -5793,8 +6476,8 @@ async def game():
                         pick_now = pygame.time.get_ticks()
 
                         if (
-                                gs.last_pickup_at > 0
-                                and pick_now - gs.last_pickup_at <= COMBO_WINDOW_MS
+                            gs.last_pickup_at > 0
+                            and pick_now - gs.last_pickup_at <= COMBO_WINDOW_MS
                         ):
                             gs.combo += 1
                         else:
@@ -5825,7 +6508,7 @@ async def game():
                                 f'COMBO x{gs.combo}', (255, 160, 40), 26
                             )
 
-                        play_sfx('pokeball')
+                        play_sfx('recollir_pokeball')
 
                 for i in range(len(gs.enemies) - 1, -1, -1):
 
@@ -5838,17 +6521,15 @@ async def game():
                     if player_hitbox.colliderect(enemy):
 
                         if (
-                                gs.velocity_y > 0
-                                and not on_ground
-                                and player_hitbox.bottom <= enemy.top + enemy.height * 0.6
+                            gs.velocity_y > 0
+                            and not on_ground
+                            and player_hitbox.bottom <= enemy.top + enemy.height * 0.6
                         ):
 
                             ex, etop = enemy.centerx, enemy.top
 
                             hit_enemy(
-                                gs, i,
-                                ENEMY_STOMP_DAMAGE.get(gs.enemy_kind[i], 99) + gs.enemy_bonus,
-                                YELLOW
+                                gs, i, ENEMY_STOMP_DAMAGE.get(gs.enemy_kind[i], 99), YELLOW
                             )
 
                             spawn_ring(ex, etop, YELLOW, 40, 250)
@@ -5871,6 +6552,7 @@ async def game():
                         update_boss_death(gs, pygame.time.get_ticks())
 
                         if pygame.time.get_ticks() >= gs.boss_death_end:
+
                             game_state = 'final'
                             final_start = pygame.time.get_ticks()
 
@@ -5887,11 +6569,36 @@ async def game():
                             update_boss(gs, player_hitbox)
 
                         if gs.boss_dead:
+
                             final_time = time.time() - gs.start_time
 
                             final_is_record, final_best = submit_record(
                                 record_key('boss'), final_time
                             )
+
+                            # --- MEDALLES ---
+                            #   medalla     = derrotar el boss en aquesta dificultat
+                            #   medalla TOP = a més, sense cap mort en tota la partida
+                            diff_key = DIFFICULTY['key']
+
+                            flawless = (RUN['deaths'] == 0)
+
+                            new_comp = not MEDALS[diff_key]['completed']
+                            new_top = flawless and not MEDALS[diff_key]['no_deaths']
+
+                            MEDALS[diff_key]['completed'] = True
+
+                            if flawless:
+                                MEDALS[diff_key]['no_deaths'] = True
+
+                            save_medals()
+
+                            final_medal = {
+                                'key': diff_key,
+                                'top': flawless,
+                                'new_comp': new_comp,
+                                'new_top': new_top,
+                            }
 
                             start_boss_death(gs, pygame.time.get_ticks())
 
@@ -5920,6 +6627,10 @@ async def game():
                         )
 
                     draw_victory()
+
+                    play_sfx('victoria_nivell')
+
+                    music_fadeout()      # la música del nivell s'apaga en completar-lo
 
                     waiting = True
 
@@ -5993,6 +6704,7 @@ async def game():
                                 continue
 
                             if event.key == pygame.K_b:
+
                                 in_shop = True
                                 shop_char = selected
                                 shop_ability = 0
@@ -6000,6 +6712,7 @@ async def game():
 
                             # Següent nivell ara amb ENTER
                             if event.key == pygame.K_RETURN:
+
                                 gs.reset(gs.level + 1)
 
                                 gs.start_time = time.time()
@@ -6014,6 +6727,7 @@ async def game():
 
                             # Reintentar mateix nivell ara amb ESPAI
                             if event.key == pygame.K_SPACE:
+
                                 gs.reset(gs.level)
 
                                 gs.start_time = time.time()
@@ -6025,6 +6739,20 @@ async def game():
                                 start_fade_in()
 
                                 music_replay()
+
+            # --- compta les morts de la partida (per a la medalla TOP) ---
+            # (abans de try_revive, que pot fer que el personatge reviscoli)
+            if not gs.alive and not gs.death_counted:
+
+                gs.death_counted = True
+
+                if current_time < gs.player_invuln_until:
+                    pass                                   # encara invulnerable: no és una mort real
+                elif gs.extra_lives > 0:
+                    if REVIVE_COUNTS_AS_DEATH:
+                        RUN['deaths'] += 1
+                else:
+                    RUN['deaths'] += 1
 
             try_revive(gs, pygame.time.get_ticks())
 
@@ -6042,27 +6770,27 @@ async def game():
                 is_upper_boss_platform = gs.is_boss and platform_index > 0
 
                 if (
-                        is_upper_boss_platform
-                        and gs.boss_platform_event == "special_attack"
+                    is_upper_boss_platform
+                    and gs.boss_platform_event == "special_attack"
                 ):
                     continue
 
                 if (
-                        is_upper_boss_platform
-                        and gs.boss_platform_event == "return_warning"
+                    is_upper_boss_platform
+                    and gs.boss_platform_event == "return_warning"
                 ):
 
                     if (now // 120) % 2 == 0:
 
                         if (
-                                gs.boss_platform_damaged_rects
-                                and platform_index - 1
-                                < len(gs.boss_platform_damaged_rects)
+                            gs.boss_platform_damaged_rects
+                            and platform_index - 1
+                            < len(gs.boss_platform_damaged_rects)
                         ):
 
                             preview = gs.boss_platform_damaged_rects[
                                 platform_index - 1
-                                ]
+                            ]
 
                             texture = (
                                 platform_texture
@@ -6087,6 +6815,7 @@ async def game():
             draw_boss_platform_debris(gs)
 
             for pokeball, value in zip(gs.pokeballs, gs.pokeball_values):
+
                 tex = (
                     pokeball_small_texture
                     if value <= POINTS_SIMPLE_POKEBALL
@@ -6132,6 +6861,7 @@ async def game():
                     )
 
                 if gs.enemy_hp[i] < gs.enemy_hp_max[i]:
+
                     w = enemy.width
                     frac = gs.enemy_hp[i] / gs.enemy_hp_max[i]
 
@@ -6150,9 +6880,10 @@ async def game():
             if pokemon_state == "camina":
 
                 if (
-                        current_time - last_change_frame_time
-                        >= animation_protagonist_speed
+                    current_time - last_change_frame_time
+                    >= animation_protagonist_speed
                 ):
+
                     last_change_frame_time = current_time
 
                     sprite_index = (sprite_index + 1) % len(player_char.run)
@@ -6180,8 +6911,8 @@ async def game():
             )
 
             if gs.alive and not (
-                    current_time < gs.player_invuln_until
-                    and (current_time // 100) % 2 == 0
+                current_time < gs.player_invuln_until
+                and (current_time // 100) % 2 == 0
             ):
                 spr.draw(
                     screen,
@@ -6223,6 +6954,7 @@ async def game():
             screen.blit(time_text, (850, 20))
 
             if not gs.is_boss:
+
                 screen.blit(pokeball_text, (810, 60))
 
                 points_text = font.render(
@@ -6240,10 +6972,27 @@ async def game():
 
             hud_diff = diff()
 
-            screen.blit(
-                _font(20, True).render(hud_diff['nom'], True, hud_diff['color']),
-                (level_text.get_width() + 34, 28)
+            diff_tag = _font(20, True).render(hud_diff['nom'], True, hud_diff['color'])
+
+            screen.blit(diff_tag, (level_text.get_width() + 34, 28))
+
+            # indicador de la medalla TOP: encara viva (cap mort) o perduda
+            clean_run = (RUN['deaths'] == 0)
+
+            tag_x = level_text.get_width() + 34 + diff_tag.get_width() + 16
+
+            draw_star(
+                screen, tag_x + 9, 38, 9,
+                GOLD if clean_run else (110, 110, 120)
             )
+
+            top_tag = _font(16, True).render(
+                'SENSE MORTS' if clean_run else 'TOP PERDUDA',
+                True,
+                GOLD if clean_run else (140, 140, 150)
+            )
+
+            screen.blit(top_tag, (tag_x + 24, 30))
 
             draw_character_faces(selected, used_characters, 20, 62)
 
@@ -6268,6 +7017,7 @@ async def game():
             special_id = SPECIAL_BY_CHAR.get(nom)
 
             if special_id and lv(special_id) > 0:
+
                 ready = current_time >= gs.special_ready_at
 
                 sp_text = _font(20, True).render(
@@ -6287,6 +7037,7 @@ async def game():
                 )
 
             if gs.extra_lives > 0:
+
                 life_text = _font(20, True).render(
                     f'Vides extra: {gs.extra_lives}', True, (255, 120, 160)
                 )
@@ -6294,10 +7045,11 @@ async def game():
                 screen.blit(life_text, (20, 150))
 
             if (
-                    gs.combo >= 2
-                    and gs.last_pickup_at > 0
-                    and current_time - gs.last_pickup_at <= COMBO_WINDOW_MS
+                gs.combo >= 2
+                and gs.last_pickup_at > 0
+                and current_time - gs.last_pickup_at <= COMBO_WINDOW_MS
             ):
+
                 combo_text = _font(24, True).render(
                     f'COMBO x{gs.combo}', True, (255, 160, 40)
                 )
@@ -6305,6 +7057,7 @@ async def game():
                 screen.blit(combo_text, (20, 176))
 
             if len(CHARACTERS) - len(used_characters) > 1:
+
                 sw_hint = _font(16, True).render(
                     '1-2-3 / TAB = canviar de personatge', True, (200, 200, 200)
                 )
@@ -6312,6 +7065,7 @@ async def game():
                 screen.blit(sw_hint, (20, HEIGHT - 54))
 
             if MUTED['on']:
+
                 mute_text = _font(20, True).render(
                     'MUT (N)', True, (255, 120, 120)
                 )
@@ -6323,6 +7077,7 @@ async def game():
                 draw_boss_bar(gs)
 
                 if time.time() - gs.start_time < 5:
+
                     hint = font.render(
                         f'Salta-li al cap {gs.boss_max_hp} cops! Esquiva els atacs!',
                         True,
@@ -6340,11 +7095,13 @@ async def game():
 
             if not gs.alive:
 
+                gs.has_died = True
                 used_characters.add(selected)
 
                 all_dead = len(used_characters) >= len(CHARACTERS)
 
                 if not gs.death_fx:
+
                     gs.death_fx = True
 
                     spawn_particles(
@@ -6360,6 +7117,7 @@ async def game():
                     )
 
                 if not gs.death_music_played:
+
                     play_music('assets/musica_mort.mp3')
 
                     gs.death_music_played = True
@@ -6377,6 +7135,7 @@ async def game():
                     screen.blit(dark, (0, 0))
 
                     if current_time >= gs.game_over_at:
+
                         go_bg = _to_gray(screen.copy())
                         go_start = current_time
 
@@ -6421,11 +7180,13 @@ async def game():
                     ]
 
                     if keys[pygame.K_RETURN]:
+
                         death_selected = disponibles[0]
 
                         game_state = 'death_select'
 
                     if keys[pygame.K_ESCAPE]:
+
                         selected = 0
                         death_selected = 0
 
