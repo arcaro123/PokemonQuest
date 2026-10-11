@@ -90,15 +90,6 @@ pygame.init()
 
 audio_log(f'web={IS_WEB} mixer={pygame.mixer.get_init()}')
 
-try:
-    _m = music_file('assets/musica2.mp3')
-    pygame.mixer.music.load(_m)
-    pygame.mixer.music.set_volume(0.3)
-    pygame.mixer.music.play(-1)
-    audio_log(f'musica OK: {_m}')
-except Exception as _e:
-    audio_log(f'ERROR musica menu: {_e}')
-
 WIDTH, HEIGHT = 1024, 720
 AMPLADA, ALTURA = WIDTH, HEIGHT
 
@@ -941,13 +932,19 @@ MUTED = {'on': False}
 # ---------------------------------------------------------------
 
 MUSIC_VOLUME = {
-    'musica1': 0.20,        # música dels nivells
-    'musica2': 0.30,        # música del menú i de la pantalla final
-    'musica_mort': 0.60,    # música quan mors
+    'lluita': 0.50,
+    'musica2': 0.60,
+    'musica_menu': 0.60,
+    'musica_mort': 0.60,
 }
 MUSIC_DEFAULT_VOLUME = 0.5
 
-MUSIC = {'track': 'musica2', 'fade': 1.0}
+LOOP_TRACKS = {'lluita', 'musica2', 'musica_menu'}     # aquestes sonen en bucle
+
+MUSIC = {
+    'track': 'musica2', 'path': 'assets/musica2.ogg', 'loop': True,
+    'fade': 1.0, 'last_vol': None, 'unlocked': not IS_WEB,
+}
 
 
 def music_volume():
@@ -955,19 +952,62 @@ def music_volume():
 
 
 def apply_volume():
+    vol = round(0.0 if MUTED['on'] else music_volume() * MUSIC['fade'], 2)
+
+    if vol == MUSIC['last_vol']:
+        return
+
     try:
-        pygame.mixer.music.set_volume(
-            0.0 if MUTED['on'] else music_volume() * MUSIC['fade']
-        )
+        pygame.mixer.music.set_volume(vol)
+        MUSIC['last_vol'] = vol
     except pygame.error:
         pass
 
 
 def sync_music_volume():
-    """S'executa a cada fotograma: així el volum sempre és el de MUSIC_VOLUME,
-    encara que el navegador o el reproductor el tornin a pujar en carregar una música."""
-
     apply_volume()
+
+
+def _start_music():
+    ruta = music_file(MUSIC['path'])
+
+    try:
+        pygame.mixer.music.load(ruta)
+        MUSIC['last_vol'] = None
+        apply_volume()
+        pygame.mixer.music.play(-1 if MUSIC['loop'] else 0)
+        audio_log(f'musica OK: {ruta}')
+    except (pygame.error, FileNotFoundError) as e:
+        audio_log(f'ERROR musica {ruta}: {e}')
+
+
+def play_music(path, loop=None):
+
+    MUSIC['path'] = path
+    MUSIC['track'] = os.path.splitext(os.path.basename(path))[0]
+    MUSIC['fade'] = 1.0
+    MUSIC['loop'] = (MUSIC['track'] in LOOP_TRACKS) if loop is None else loop
+
+    _start_music()
+
+
+def unlock_audio():
+    """Al navegador, en el primer clic o tecla, (re)engega la música si no sonava."""
+
+    if MUSIC['unlocked']:
+        return
+
+    if any(pygame.mouse.get_pressed()) or any(pygame.key.get_pressed()):
+
+        MUSIC['unlocked'] = True
+
+        try:
+            busy = pygame.mixer.music.get_busy()
+        except pygame.error:
+            busy = False
+
+        if not busy:
+            _start_music()
 
 
 def music_fadeout(ms=700):
@@ -992,11 +1032,8 @@ def music_unpause():
 
 
 def music_replay():
-    apply_volume()
-    try:
-        pygame.mixer.music.play()
-    except pygame.error:
-        pass
+    MUSIC['fade'] = 1.0
+    _start_music()
 
 
 def toggle_mute():
@@ -1021,7 +1058,7 @@ SFX_VOLUME = {          # volum de cada so (0.0 - 1.0); els que no hi són, 0.5
     'victoria_nivell': 0.6,
     'millorar_abilitat': 0.6,
     'recollir_pokeball': 0.5,
-    'mort_enemic': 0.7,
+    'mort_enemic': 1.0,
 }
 
 
@@ -5460,28 +5497,6 @@ def cycle_selection(current, step, used_characters):
     return disponibles[(pos + step) % len(disponibles)]
 
 
-def play_music(path, loop=False):
-
-    ruta = music_file(path)
-
-    try:
-        pygame.mixer.music.load(ruta)
-    except Exception as e:
-        audio_log(f'ERROR musica {ruta}: {e}')
-        return
-
-    audio_log(f'musica OK: {ruta}')
-
-    MUSIC['track'] = os.path.splitext(os.path.basename(path))[0]
-    MUSIC['fade'] = 1.0
-
-    apply_volume()
-
-    pygame.mixer.music.play(-1 if loop else 0)
-
-    apply_volume()
-
-
 JUMP_KEYS = (pygame.K_SPACE, pygame.K_UP, pygame.K_w)
 
 
@@ -5673,6 +5688,8 @@ async def game():
 
     shop_return = 'menu'
 
+    play_music('assets/musica2.ogg')
+
     while running:
 
         await asyncio.sleep(0)
@@ -5684,6 +5701,7 @@ async def game():
         current_time = pygame.time.get_ticks()
 
         sync_music_volume()
+        unlock_audio()
 
         if keys[pygame.K_F1]:
             if not AUDIO['held']:
@@ -5709,14 +5727,6 @@ async def game():
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_n:
                     toggle_mute()
-
-                if (
-                    IS_WEB
-                    and not AUDIO['kick']
-                    and event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN)
-                ):
-                    AUDIO['kick'] = True
-                    play_music('assets/musica2.mp3', True)
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
                     game_state = 'medals'
@@ -5966,7 +5976,7 @@ async def game():
                             gs.start_time = time.time()
                             prev_on_ground = True
                             start_fade_in()
-                            play_music('assets/musica1.mp3')
+                            play_music('assets/lluita.ogg')
                             break
 
                 if event.type == pygame.KEYDOWN:
@@ -6015,7 +6025,7 @@ async def game():
 
                             start_fade_in()
 
-                            play_music('assets/musica1.mp3')
+                            play_music('assets/lluita.ogg')
 
                     if event.key == pygame.K_ESCAPE:
 
@@ -6041,7 +6051,7 @@ async def game():
 
                 game_state = 'menu'
 
-                play_music('assets/musica2.mp3')
+                play_music('assets/musica2.ogg')
 
                 continue
 
@@ -6077,7 +6087,7 @@ async def game():
                             game_state = 'playing'
                             prev_on_ground = True
                             start_fade_in()
-                            play_music('assets/musica1.mp3')
+                            play_music('assets/lluita.ogg')
                             break
 
                 if event.type == pygame.KEYDOWN:
@@ -6119,7 +6129,7 @@ async def game():
 
                         start_fade_in()
 
-                        play_music('assets/musica1.mp3')
+                        play_music('assets/lluita.ogg')
 
                     if event.key == pygame.K_ESCAPE:
 
@@ -6130,7 +6140,7 @@ async def game():
 
                         game_state = 'menu'
 
-                        play_music('assets/musica2.mp3')
+                        play_music('assets/musica2.ogg')
 
         # =====================================================
         # CREDITS
@@ -6196,7 +6206,7 @@ async def game():
                         gs.reset(START_LEVEL)
                         gs.start_time = time.time()
 
-                        play_music('assets/musica2.mp3')
+                        play_music('assets/musica2.ogg')
 
                         game_state = 'select'
 
@@ -6217,7 +6227,7 @@ async def game():
 
                         return_to_menu(gs, used_characters)
 
-                        play_music('assets/musica2.mp3')
+                        play_music('assets/musica2.ogg')
 
                         game_state = 'menu'
 
@@ -6252,7 +6262,7 @@ async def game():
 
                         start_fade_in()
 
-                        play_music('assets/musica1.mp3')
+                        play_music('assets/lluita.ogg')
 
                     if event.key == pygame.K_ESCAPE:
 
@@ -6260,7 +6270,7 @@ async def game():
 
                         game_state = 'menu'
 
-                        play_music('assets/musica2.mp3')
+                        play_music('assets/musica2.ogg')
 
         # =====================================================
         # PAUSA
@@ -6642,7 +6652,7 @@ async def game():
                             popups.clear()
 
                             apply_volume()
-                            play_music('assets/musica2.mp3')
+                            play_music('assets/musica2.ogg')
 
                     else:
 
@@ -7199,7 +7209,7 @@ async def game():
 
                 if not gs.death_music_played:
 
-                    play_music('assets/musica_mort.mp3')
+                    play_music('assets/musica_mort.ogg')
 
                     gs.death_music_played = True
 
@@ -7275,7 +7285,7 @@ async def game():
 
                         game_state = 'menu'
 
-                        play_music('assets/musica2.mp3')
+                        play_music('assets/musica2.ogg')
 
             apply_boss_shake(gs)
 
