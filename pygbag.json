@@ -1,0 +1,8 @@
+{
+  "assets": [
+    "assets/*.png",
+    "assets/*.ogg",
+    "assets/*.wav",
+    "assets/*.ttf"
+  ]
+}
