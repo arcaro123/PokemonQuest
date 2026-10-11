@@ -86,6 +86,12 @@ def audio_log(msg):
     del AUDIO_LOG[:-7]
 
 
+# buffer d'àudio més gran: evita petits talls i soroll quan el joc va just
+try:
+    pygame.mixer.pre_init(44100, -16, 2, 2048)
+except Exception:
+    pass
+
 pygame.init()
 
 audio_log(f'web={IS_WEB} mixer={pygame.mixer.get_init()}')
@@ -6814,7 +6820,7 @@ async def game():
 
                                 start_fade_in()
 
-                                music_replay()
+                                play_music('assets/lluita.ogg')
 
                             # Reintentar mateix nivell ara amb ESPAI
                             if event.key == pygame.K_SPACE:
@@ -6829,7 +6835,7 @@ async def game():
 
                                 start_fade_in()
 
-                                music_replay()
+                                play_music('assets/lluita.ogg')
 
             # --- compta les morts de la partida (per a la medalla TOP) ---
             # (abans de try_revive, que pot fer que el personatge reviscoli)
