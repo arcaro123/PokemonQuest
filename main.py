@@ -1063,7 +1063,7 @@ SFX_VOLUME = {          # volum de cada so (0.0 - 1.0); els que no hi són, 0.5
     'iniciar_partida': 0.6,
     'victoria_nivell': 0.6,
     'millorar_abilitat': 0.6,
-    'recollir_pokeball': 0.5,
+    'recollir_pokeball': 1.0,
     'mort_enemic': 1.0,
 }
 
@@ -6268,6 +6268,8 @@ async def game():
 
                         start_fade_in()
 
+                        play_sfx('iniciar_partida')
+
                         play_music('assets/lluita.ogg')
 
                     if event.key == pygame.K_ESCAPE:
@@ -6820,6 +6822,7 @@ async def game():
 
                                 start_fade_in()
 
+                                play_sfx('iniciar_partida')
                                 play_music('assets/lluita.ogg')
 
                             # Reintentar mateix nivell ara amb ESPAI
@@ -6835,6 +6838,7 @@ async def game():
 
                                 start_fade_in()
 
+                                play_sfx('iniciar_partida')
                                 play_music('assets/lluita.ogg')
 
             # --- compta les morts de la partida (per a la medalla TOP) ---
