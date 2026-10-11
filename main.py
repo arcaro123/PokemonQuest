@@ -72,14 +72,32 @@ def persist_save(key, filename, data):
         pass
 
 
+AUDIO_LOG = []
+AUDIO = {'kick': False, 'debug': False, 'held': False}
+
+
+def audio_log(msg):
+    """Apunta un missatge d'àudio (consola del navegador F12 i pantalla amb F1)."""
+
+    print('[AUDIO]', msg)
+
+    AUDIO_LOG.append(str(msg))
+
+    del AUDIO_LOG[:-7]
+
+
 pygame.init()
 
+audio_log(f'web={IS_WEB} mixer={pygame.mixer.get_init()}')
+
 try:
-    pygame.mixer.music.load(music_file('assets/musica2.mp3'))
+    _m = music_file('assets/musica2.mp3')
+    pygame.mixer.music.load(_m)
     pygame.mixer.music.set_volume(0.3)
     pygame.mixer.music.play(-1)
-except (pygame.error, FileNotFoundError):
-    pass
+    audio_log(f'musica OK: {_m}')
+except Exception as _e:
+    audio_log(f'ERROR musica menu: {_e}')
 
 WIDTH, HEIGHT = 1024, 720
 AMPLADA, ALTURA = WIDTH, HEIGHT
@@ -923,7 +941,7 @@ MUTED = {'on': False}
 # ---------------------------------------------------------------
 
 MUSIC_VOLUME = {
-    'lluita': 0.20,        # música dels nivells
+    'musica1': 0.20,        # música dels nivells
     'musica2': 0.30,        # música del menú i de la pantalla final
     'musica_mort': 0.60,    # música quan mors
 }
@@ -1020,7 +1038,8 @@ def load_sfx():
                     snd.set_volume(SFX_VOLUME.get(name, 0.5))
                     sfx[name] = snd
                     break
-                except pygame.error:
+                except Exception as e:
+                    audio_log(f'ERROR so {ruta}: {e}')
                     continue
 
 
@@ -5443,10 +5462,15 @@ def cycle_selection(current, step, used_characters):
 
 def play_music(path, loop=False):
 
+    ruta = music_file(path)
+
     try:
-        pygame.mixer.music.load(music_file(path))
-    except (pygame.error, FileNotFoundError):
+        pygame.mixer.music.load(ruta)
+    except Exception as e:
+        audio_log(f'ERROR musica {ruta}: {e}')
         return
+
+    audio_log(f'musica OK: {ruta}')
 
     MUSIC['track'] = os.path.splitext(os.path.basename(path))[0]
     MUSIC['fade'] = 1.0
@@ -5529,6 +5553,48 @@ def show_fatal(err):
         y += 24
 
     pygame.display.flip()
+
+
+_real_flip = pygame.display.flip
+_dbg_font = {}
+
+
+def _flip_with_audio_debug():
+    """Amb F1 es veu un quadre amb l'estat de l'àudio damunt de qualsevol pantalla."""
+
+    if AUDIO['debug']:
+
+        if 'f' not in _dbg_font:
+            _dbg_font['f'] = pygame.font.Font(None, 22)
+
+        f = _dbg_font['f']
+
+        try:
+            busy = pygame.mixer.music.get_busy()
+        except Exception:
+            busy = '?'
+
+        lines = [
+            f'AUDIO (F1)  web={IS_WEB}  mixer={pygame.mixer.get_init() is not None}',
+            f"pista={MUSIC['track']}  sonant={busy}  volum={music_volume():.2f}  mut={MUTED['on']}",
+            f'sons carregats: {len(sfx)}/{len(SFX_NAMES)}',
+        ] + AUDIO_LOG[-5:]
+
+        box = pygame.Surface((WIDTH - 20, 20 * len(lines) + 12), pygame.SRCALPHA)
+        box.fill((0, 0, 0, 215))
+
+        screen.blit(box, (10, HEIGHT - box.get_height() - 10))
+
+        y = HEIGHT - box.get_height() - 4
+
+        for ln in lines:
+            screen.blit(f.render(ln[:120], True, (120, 255, 140)), (18, y))
+            y += 20
+
+    _real_flip()
+
+
+pygame.display.flip = _flip_with_audio_debug
 
 
 async def main():
@@ -5619,6 +5685,13 @@ async def game():
 
         sync_music_volume()
 
+        if keys[pygame.K_F1]:
+            if not AUDIO['held']:
+                AUDIO['debug'] = not AUDIO['debug']
+            AUDIO['held'] = True
+        else:
+            AUDIO['held'] = False
+
         # =====================================================
         # MENU
         # =====================================================
@@ -5636,6 +5709,14 @@ async def game():
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_n:
                     toggle_mute()
+
+                if (
+                    IS_WEB
+                    and not AUDIO['kick']
+                    and event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN)
+                ):
+                    AUDIO['kick'] = True
+                    play_music('assets/musica2.mp3', True)
 
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
                     game_state = 'medals'
@@ -5885,7 +5966,7 @@ async def game():
                             gs.start_time = time.time()
                             prev_on_ground = True
                             start_fade_in()
-                            play_music('assets/lluita.mp3')
+                            play_music('assets/musica1.mp3')
                             break
 
                 if event.type == pygame.KEYDOWN:
@@ -5934,7 +6015,7 @@ async def game():
 
                             start_fade_in()
 
-                            play_music('assets/lluita.mp3')
+                            play_music('assets/musica1.mp3')
 
                     if event.key == pygame.K_ESCAPE:
 
@@ -5996,7 +6077,7 @@ async def game():
                             game_state = 'playing'
                             prev_on_ground = True
                             start_fade_in()
-                            play_music('assets/lluita.mp3')
+                            play_music('assets/musica1.mp3')
                             break
 
                 if event.type == pygame.KEYDOWN:
@@ -6038,7 +6119,7 @@ async def game():
 
                         start_fade_in()
 
-                        play_music('assets/lluita.mp3')
+                        play_music('assets/musica1.mp3')
 
                     if event.key == pygame.K_ESCAPE:
 
@@ -6171,7 +6252,7 @@ async def game():
 
                         start_fade_in()
 
-                        play_music('assets/lluita.mp3')
+                        play_music('assets/musica1.mp3')
 
                     if event.key == pygame.K_ESCAPE:
 
