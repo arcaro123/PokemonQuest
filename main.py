@@ -660,10 +660,31 @@ BASIC_ATTACK_REQUIRES_SPECIAL = True
 SPRITE_FACES_LEFT = set()
 
 # Nivell d'inici corregit al Nivell 1
-START_LEVEL = 1
+START_LEVEL = 11
 
 RESUME_AT_NEXT_LEVEL = False
+PROGRESS_FILE = 'progress.json'
+PROGRESS_KEY = 'pokequest_progress'
 PROGRESS = {'level': None}
+
+
+def save_progress():
+    persist_save(PROGRESS_KEY, PROGRESS_FILE, PROGRESS)
+
+
+def load_progress():
+    data = persist_load(PROGRESS_KEY, PROGRESS_FILE)
+    if not isinstance(data, dict):
+        return
+    try:
+        level = data.get('level')
+        if level is not None:
+            level = int(level)
+            if START_LEVEL <= level <= BOSS_LEVEL:
+                PROGRESS['level'] = level
+    except (TypeError, ValueError):
+        PROGRESS['level'] = None
+
 
 # Morts de la partida actual (per a la medalla TOP)
 RUN = {'deaths': 0}
@@ -684,9 +705,9 @@ def resume_level():
 
 def reset_progress():
     """Comença una partida nova: sense progrés i sense cap mort comptada."""
-
     PROGRESS['level'] = None
     RUN['deaths'] = 0
+    save_progress()
 
 
 BOSS_LEVEL = 11
@@ -764,31 +785,30 @@ SAVE_FILE = 'savegame.json'
 SAVE = {'points': 0, 'upgrades': {}}
 
 
+SAVE_KEY = 'pokequest_save'
+
+
 def load_save():
-    try:
-        with open(SAVE_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        SAVE['points'] = int(data.get('points', 0))
-        SAVE['upgrades'] = dict(data.get('upgrades', {}))
-    except (OSError, ValueError, TypeError):
-        SAVE['points'] = 0
-        SAVE['upgrades'] = {}
+    data = persist_load(SAVE_KEY, SAVE_FILE)
+    if isinstance(data, dict):
+        try:
+            SAVE['points'] = int(data.get('points', 0))
+            SAVE['upgrades'] = dict(data.get('upgrades', {}))
+            return
+        except (ValueError, TypeError):
+            pass
+    SAVE['points'] = 0
+    SAVE['upgrades'] = {}
 
 
 def save_game():
-    try:
-        with open(SAVE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(SAVE, f, ensure_ascii=False, indent=2)
-    except OSError:
-        pass
+    persist_save(SAVE_KEY, SAVE_FILE, SAVE)
 
 
 def delete_save_on_exit():
-    try:
-        if os.path.exists(SAVE_FILE):
-            os.remove(SAVE_FILE)
-    except OSError:
-        pass
+    # Guardem les dades en sortir; no eliminem la partida.
+    save_game()
+    save_progress()
 
 
 def add_points(n):
@@ -848,39 +868,39 @@ DEFAULT_ABILITIES = [
 ABILITIES = {
     'Pikachu': [
         {'id': 'triple_salt', 'nom': 'Triple salt',
-         'desc': "Un salt extra a l'aire (3 salts)", 'costs': [8]},
+         'desc': "Un salt extra a l'aire (3 salts)", 'costs': [0]},
         {'id': 'punts_extra', 'nom': 'Punts extra',
-         'desc': '+1 punt per nivell a cada pokeball', 'costs': [6, 12]},
+         'desc': '+1 punt per nivell a cada pokeball', 'costs': [0, 0]},
         {'id': 'rebot', 'nom': 'Rebot elèctric',
-         'desc': 'Rebotes més alt en trepitjar el boss', 'costs': [5, 10]},
+         'desc': 'Rebotes més alt en trepitjar el boss', 'costs': [0, 0]},
         {'id': 'vida_extra', 'nom': 'Vida extra',
-         'desc': 'Reviu 1 cop per nivell quan mors', 'costs': [12, 20]},
+         'desc': 'Reviu 1 cop per nivell quan mors', 'costs': [0, 0]},
         {'id': 'cua', 'nom': 'Llamp elèctric',
-         'desc': 'Desbloqueja atacs. Especial C/K: llamp llarg', 'costs': [10, 18, 28]},
+         'desc': 'Desbloqueja atacs. Especial C/K: llamp llarg', 'costs': [0, 0, 0]},
     ],
     'Jolteon': [
         {'id': 'velocitat', 'nom': 'Més ràpid',
-         'desc': 'Corre més ràpid (+1 per nivell)', 'costs': [5, 10, 15]},
+         'desc': 'Corre més ràpid (+1 per nivell)', 'costs': [0, 0, 0]},
         {'id': 'planeig', 'nom': 'Planeig',
-         'desc': 'Cau més a poc a poc', 'costs': [6, 12]},
+         'desc': 'Cau més a poc a poc', 'costs': [0, 0]},
         {'id': 'cos_agil', 'nom': 'Cos àgil',
-         'desc': 'Hitbox més petita: més difícil tocar-lo', 'costs': [7, 14]},
+         'desc': 'Hitbox més petita: més difícil tocar-lo', 'costs': [0, 0]},
         {'id': 'imant', 'nom': 'Imant',
-         'desc': 'Atrau les pokeballs des de més lluny', 'costs': [5, 10, 15]},
+         'desc': 'Atrau les pokeballs des de més lluny', 'costs': [0, 0, 0]},
         {'id': 'plasma', 'nom': 'Ona de plasma',
-         'desc': 'Desbloqueja atacs. Especial C/K: anell que travessa', 'costs': [10, 18, 28]},
+         'desc': 'Desbloqueja atacs. Especial C/K: anell que travessa', 'costs': [0, 0, 0]},
     ],
     'Flareon': [
         {'id': 'salt_alt', 'nom': 'Salt alt',
-         'desc': 'El primer salt arriba més amunt', 'costs': [5, 10, 15]},
+         'desc': 'El primer salt arriba més amunt', 'costs': [0, 0, 0]},
         {'id': 'doble_fort', 'nom': 'Doble salt potent',
-         'desc': 'El segon salt és més fort', 'costs': [6, 12]},
+         'desc': 'El segon salt és més fort', 'costs': [0, 0]},
         {'id': 'mal_boss', 'nom': 'Foc intens',
-         'desc': 'Fa +1 de mal al boss per nivell', 'costs': [12, 22]},
+         'desc': 'Fa +1 de mal per nivell (enemics i boss)', 'costs': [0, 0]},
         {'id': 'enemics_lents', 'nom': 'Enemics lents',
-         'desc': 'Els enemics volen més lents', 'costs': [5, 10]},
+         'desc': 'Els enemics volen més lents', 'costs': [0, 0]},
         {'id': 'foc', 'nom': 'Cometa de foc',
-         'desc': 'Desbloqueja atacs. Especial C/K: cometa explosiu', 'costs': [10, 18, 28]},
+         'desc': 'Desbloqueja atacs. Especial C/K: cometa explosiu', 'costs': [0, 0, 0]},
     ],
 }
 
@@ -1901,8 +1921,8 @@ def make_pikachu():
     idle = pygame.image.load('assets/pikachu.png').convert_alpha()
 
     run = [
-        pygame.image.load('assets/pikachu_corre13.png').convert_alpha(),
-        pygame.image.load('assets/pikachu_corre23.png').convert_alpha()
+        pygame.image.load('assets/pikachu_corre1.png').convert_alpha(),
+        pygame.image.load('assets/pikachu_corre2.png').convert_alpha()
     ]
 
     if os.path.exists('assets/baix.png'):
@@ -2260,6 +2280,7 @@ load_sfx()
 load_save()
 load_records()
 load_medals()
+load_progress()
 
 
 def enemy_hitbox_size(kind):
@@ -6710,6 +6731,7 @@ async def game():
                     add_points(points_gained)
 
                     PROGRESS['level'] = max(PROGRESS['level'] or 0, gs.level)
+                    save_progress()
 
                     is_record, best_time = submit_record(record_key(gs.level), time_taken)
 
