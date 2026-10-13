@@ -761,34 +761,34 @@ LEVEL_BACKGROUNDS = {
 # ---------------------------------------------------------------
 
 SAVE_FILE = 'savegame.json'
+SAVE_KEY = 'pokequest_save'
 SAVE = {'points': 0, 'upgrades': {}}
 
 
 def load_save():
-    try:
-        with open(SAVE_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        SAVE['points'] = int(data.get('points', 0))
-        SAVE['upgrades'] = dict(data.get('upgrades', {}))
-    except (OSError, ValueError, TypeError):
-        SAVE['points'] = 0
-        SAVE['upgrades'] = {}
+    """Carrega punts i habilitats des del localStorage o del fitxer JSON."""
+    data = persist_load(SAVE_KEY, SAVE_FILE)
+    if isinstance(data, dict):
+        try:
+            SAVE['points'] = max(0, int(data.get('points', 0)))
+            upgrades = data.get('upgrades', {})
+            SAVE['upgrades'] = upgrades if isinstance(upgrades, dict) else {}
+            return
+        except (ValueError, TypeError):
+            pass
+
+    SAVE['points'] = 0
+    SAVE['upgrades'] = {}
 
 
 def save_game():
-    try:
-        with open(SAVE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(SAVE, f, ensure_ascii=False, indent=2)
-    except OSError:
-        pass
+    """Desa els punts i les habilitats al navegador i/o al fitxer JSON."""
+    persist_save(SAVE_KEY, SAVE_FILE, SAVE)
 
 
 def delete_save_on_exit():
-    try:
-        if os.path.exists(SAVE_FILE):
-            os.remove(SAVE_FILE)
-    except OSError:
-        pass
+    """En tancar el joc, desa les dades en lloc d'esborrar la partida."""
+    save_game()
 
 
 def add_points(n):
