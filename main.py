@@ -30,70 +30,46 @@ def music_file(path):
 # refrescar la pàgina); a l'escriptori, en un fitxer .json.
 # ---------------------------------------------------------------
 
-def _browser_storage():
-    """Obté localStorage de diferents maneres segons el runtime del navegador."""
-    try:
-        import platform
-        storage = getattr(getattr(platform, 'window', None), 'localStorage', None)
-        if storage is not None:
-            return storage
-    except Exception:
-        pass
-    try:
-        from js import window
-        return window.localStorage
-    except Exception:
-        return None
-
-
 def persist_load(key, filename):
-    """Llegeix les dades del navegador o del fitxer local."""
+    """Retorna les dades desades (o None si no n'hi ha)."""
+
     if IS_WEB:
+
         try:
-            storage = _browser_storage()
-            if storage is not None:
-                raw = storage.getItem(key)
-                if raw is not None:
-                    raw = str(raw)
-                    if raw and raw not in ('null', 'undefined'):
-                        return json.loads(raw)
-        except Exception as exc:
-            print(f'[DESATGE] No s ha pogut llegir {key} del navegador: {exc}')
+            import platform
+            raw = platform.window.localStorage.getItem(key)
+            if raw is not None and str(raw) not in ('', 'null', 'undefined'):
+                return json.loads(str(raw))
+        except Exception:
+            pass
 
     try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
-        if os.path.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
                 return json.load(f)
-    except (OSError, ValueError, TypeError, NameError) as exc:
-        print(f'[DESATGE] No s ha pogut llegir {filename}: {exc}')
+    except (OSError, ValueError, TypeError):
+        pass
+
     return None
 
 
 def persist_save(key, filename, data):
-    """Desa les dades al localStorage del navegador o en un JSON local."""
-    serialized = json.dumps(data, ensure_ascii=False)
+
+    text = json.dumps(data, ensure_ascii=False, indent=2)
 
     if IS_WEB:
+
         try:
-            storage = _browser_storage()
-            if storage is not None:
-                storage.setItem(key, serialized)
-                # Verifica que el navegador ha acceptat realment el desatge.
-                check = storage.getItem(key)
-                if check is not None and str(check) == serialized:
-                    return True
-        except Exception as exc:
-            print(f'[DESATGE] No s ha pogut guardar {key} al navegador: {exc}')
+            import platform
+            platform.window.localStorage.setItem(key, text)
+        except Exception:
+            pass
 
     try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(json.dumps(data, ensure_ascii=False, indent=2))
-        return True
-    except (OSError, TypeError, NameError) as exc:
-        print(f'[DESATGE] No s ha pogut guardar {filename}: {exc}')
-        return False
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(text)
+    except OSError:
+        pass
 
 
 AUDIO_LOG = []
@@ -684,31 +660,10 @@ BASIC_ATTACK_REQUIRES_SPECIAL = True
 SPRITE_FACES_LEFT = set()
 
 # Nivell d'inici corregit al Nivell 1
-START_LEVEL = 11
+START_LEVEL = 1
 
 RESUME_AT_NEXT_LEVEL = False
-PROGRESS_FILE = 'progress.json'
-PROGRESS_KEY = 'pokequest_progress'
 PROGRESS = {'level': None}
-
-
-def save_progress():
-    persist_save(PROGRESS_KEY, PROGRESS_FILE, PROGRESS)
-
-
-def load_progress():
-    data = persist_load(PROGRESS_KEY, PROGRESS_FILE)
-    if not isinstance(data, dict):
-        return
-    try:
-        level = data.get('level')
-        if level is not None:
-            level = int(level)
-            if START_LEVEL <= level <= BOSS_LEVEL:
-                PROGRESS['level'] = level
-    except (TypeError, ValueError):
-        PROGRESS['level'] = None
-
 
 # Morts de la partida actual (per a la medalla TOP)
 RUN = {'deaths': 0}
@@ -729,9 +684,9 @@ def resume_level():
 
 def reset_progress():
     """Comença una partida nova: sense progrés i sense cap mort comptada."""
+
     PROGRESS['level'] = None
     RUN['deaths'] = 0
-    save_progress()
 
 
 BOSS_LEVEL = 11
@@ -809,30 +764,31 @@ SAVE_FILE = 'savegame.json'
 SAVE = {'points': 0, 'upgrades': {}}
 
 
-SAVE_KEY = 'pokequest_save'
-
-
 def load_save():
-    data = persist_load(SAVE_KEY, SAVE_FILE)
-    if isinstance(data, dict):
-        try:
-            SAVE['points'] = int(data.get('points', 0))
-            SAVE['upgrades'] = dict(data.get('upgrades', {}))
-            return
-        except (ValueError, TypeError):
-            pass
-    SAVE['points'] = 0
-    SAVE['upgrades'] = {}
+    try:
+        with open(SAVE_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        SAVE['points'] = int(data.get('points', 0))
+        SAVE['upgrades'] = dict(data.get('upgrades', {}))
+    except (OSError, ValueError, TypeError):
+        SAVE['points'] = 0
+        SAVE['upgrades'] = {}
 
 
 def save_game():
-    persist_save(SAVE_KEY, SAVE_FILE, SAVE)
+    try:
+        with open(SAVE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(SAVE, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass
 
 
 def delete_save_on_exit():
-    # Guardem les dades en sortir; no eliminem la partida.
-    save_game()
-    save_progress()
+    try:
+        if os.path.exists(SAVE_FILE):
+            os.remove(SAVE_FILE)
+    except OSError:
+        pass
 
 
 def add_points(n):
@@ -1945,8 +1901,8 @@ def make_pikachu():
     idle = pygame.image.load('assets/pikachu.png').convert_alpha()
 
     run = [
-        pygame.image.load('assets/pikachu_corre1.png').convert_alpha(),
-        pygame.image.load('assets/pikachu_corre2.png').convert_alpha()
+        pygame.image.load('assets/pikachu_corre13.png').convert_alpha(),
+        pygame.image.load('assets/pikachu_corre23.png').convert_alpha()
     ]
 
     if os.path.exists('assets/baix.png'):
@@ -2304,7 +2260,6 @@ load_sfx()
 load_save()
 load_records()
 load_medals()
-load_progress()
 
 
 def enemy_hitbox_size(kind):
@@ -6755,7 +6710,6 @@ async def game():
                     add_points(points_gained)
 
                     PROGRESS['level'] = max(PROGRESS['level'] or 0, gs.level)
-                    save_progress()
 
                     is_record, best_time = submit_record(record_key(gs.level), time_taken)
 
