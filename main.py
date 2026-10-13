@@ -30,46 +30,65 @@ def music_file(path):
 # refrescar la pàgina); a l'escriptori, en un fitxer .json.
 # ---------------------------------------------------------------
 
+def _browser_storages():
+    """Prova les dues vies habituals d'accedir al localStorage en Pygbag."""
+    if not IS_WEB:
+        return []
+    storages = []
+    try:
+        import platform
+        storages.append(platform.window.localStorage)
+    except Exception:
+        pass
+    try:
+        from js import localStorage
+        if all(localStorage is not item for item in storages):
+            storages.append(localStorage)
+    except Exception:
+        pass
+    return storages
+
+
 def persist_load(key, filename):
-    """Retorna les dades desades (o None si no n'hi ha)."""
-
-    if IS_WEB:
-
+    """Carrega primer del localStorage del navegador i després del JSON."""
+    for storage in _browser_storages():
         try:
-            import platform
-            raw = platform.window.localStorage.getItem(key)
+            raw = storage.getItem(key)
             if raw is not None and str(raw) not in ('', 'null', 'undefined'):
                 return json.loads(str(raw))
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f'[SAVE] No s’ha pogut llegir localStorage ({key}): {exc}')
 
     try:
         if os.path.exists(filename):
             with open(filename, 'r', encoding='utf-8') as f:
                 return json.load(f)
-    except (OSError, ValueError, TypeError):
-        pass
-
+    except (OSError, ValueError, TypeError) as exc:
+        print(f'[SAVE] No s’ha pogut llegir {filename}: {exc}')
     return None
 
 
 def persist_save(key, filename, data):
-
-    text = json.dumps(data, ensure_ascii=False, indent=2)
-
-    if IS_WEB:
-
+    """Desa al localStorage (web) i al fitxer JSON (escriptori)."""
+    raw = json.dumps(data, ensure_ascii=False)
+    saved_in_browser = False
+    for storage in _browser_storages():
         try:
-            import platform
-            platform.window.localStorage.setItem(key, text)
-        except Exception:
-            pass
+            storage.setItem(key, raw)
+            saved_in_browser = True
+            break
+        except Exception as exc:
+            print(f'[SAVE] No s’ha pogut escriure localStorage ({key}): {exc}')
 
-    try:
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(text)
-    except OSError:
-        pass
+    if not IS_WEB or not saved_in_browser:
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(data, ensure_ascii=False, indent=2))
+        except OSError as exc:
+            print(f'[SAVE] No s’ha pogut escriure {filename}: {exc}')
+
+    if IS_WEB and not saved_in_browser:
+        print('[SAVE] AVÍS: les dades no s’han pogut desar al navegador.')
 
 
 AUDIO_LOG = []
