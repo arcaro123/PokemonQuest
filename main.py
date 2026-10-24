@@ -660,7 +660,7 @@ BASIC_ATTACK_REQUIRES_SPECIAL = True
 SPRITE_FACES_LEFT = set()
 
 # Nivell d'inici corregit al Nivell 1
-START_LEVEL = 11
+START_LEVEL = 1
 
 RESUME_AT_NEXT_LEVEL = False
 PROGRESS = {'level': None}
