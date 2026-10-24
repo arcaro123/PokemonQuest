@@ -660,10 +660,31 @@ BASIC_ATTACK_REQUIRES_SPECIAL = True
 SPRITE_FACES_LEFT = set()
 
 # Nivell d'inici corregit al Nivell 1
-START_LEVEL = 1
+START_LEVEL = 11
 
 RESUME_AT_NEXT_LEVEL = False
+PROGRESS_FILE = 'progress.json'
+PROGRESS_KEY = 'pokequest_progress'
 PROGRESS = {'level': None}
+
+
+def save_progress():
+    persist_save(PROGRESS_KEY, PROGRESS_FILE, PROGRESS)
+
+
+def load_progress():
+    data = persist_load(PROGRESS_KEY, PROGRESS_FILE)
+    if not isinstance(data, dict):
+        return
+    try:
+        level = data.get('level')
+        if level is not None:
+            level = int(level)
+            if START_LEVEL <= level <= BOSS_LEVEL:
+                PROGRESS['level'] = level
+    except (TypeError, ValueError):
+        PROGRESS['level'] = None
+
 
 # Morts de la partida actual (per a la medalla TOP)
 RUN = {'deaths': 0}
@@ -684,9 +705,9 @@ def resume_level():
 
 def reset_progress():
     """Comença una partida nova: sense progrés i sense cap mort comptada."""
-
     PROGRESS['level'] = None
     RUN['deaths'] = 0
+    save_progress()
 
 
 BOSS_LEVEL = 11
@@ -761,34 +782,33 @@ LEVEL_BACKGROUNDS = {
 # ---------------------------------------------------------------
 
 SAVE_FILE = 'savegame.json'
-SAVE_KEY = 'pokequest_save'
 SAVE = {'points': 0, 'upgrades': {}}
 
 
+SAVE_KEY = 'pokequest_save'
+
+
 def load_save():
-    """Carrega punts i habilitats des del localStorage o del fitxer JSON."""
     data = persist_load(SAVE_KEY, SAVE_FILE)
     if isinstance(data, dict):
         try:
-            SAVE['points'] = max(0, int(data.get('points', 0)))
-            upgrades = data.get('upgrades', {})
-            SAVE['upgrades'] = upgrades if isinstance(upgrades, dict) else {}
+            SAVE['points'] = int(data.get('points', 0))
+            SAVE['upgrades'] = dict(data.get('upgrades', {}))
             return
         except (ValueError, TypeError):
             pass
-
     SAVE['points'] = 0
     SAVE['upgrades'] = {}
 
 
 def save_game():
-    """Desa els punts i les habilitats al navegador i/o al fitxer JSON."""
     persist_save(SAVE_KEY, SAVE_FILE, SAVE)
 
 
 def delete_save_on_exit():
-    """En tancar el joc, desa les dades en lloc d'esborrar la partida."""
+    # Guardem les dades en sortir; no eliminem la partida.
     save_game()
+    save_progress()
 
 
 def add_points(n):
@@ -848,39 +868,39 @@ DEFAULT_ABILITIES = [
 ABILITIES = {
     'Pikachu': [
         {'id': 'triple_salt', 'nom': 'Triple salt',
-         'desc': "Un salt extra a l'aire (3 salts)", 'costs': [8]},
+         'desc': "Un salt extra a l'aire (3 salts)", 'costs': [0]},
         {'id': 'punts_extra', 'nom': 'Punts extra',
-         'desc': '+1 punt per nivell a cada pokeball', 'costs': [6, 12]},
+         'desc': '+1 punt per nivell a cada pokeball', 'costs': [0, 0]},
         {'id': 'rebot', 'nom': 'Rebot elèctric',
-         'desc': 'Rebotes més alt en trepitjar el boss', 'costs': [5, 10]},
+         'desc': 'Rebotes més alt en trepitjar el boss', 'costs': [0, 0]},
         {'id': 'vida_extra', 'nom': 'Vida extra',
-         'desc': 'Reviu 1 cop per nivell quan mors', 'costs': [12, 20]},
+         'desc': 'Reviu 1 cop per nivell quan mors', 'costs': [0, 0]},
         {'id': 'cua', 'nom': 'Llamp elèctric',
-         'desc': 'Desbloqueja atacs. Especial C/K: llamp llarg', 'costs': [10, 18, 28]},
+         'desc': 'Desbloqueja atacs. Especial C/K: llamp llarg', 'costs': [0, 0, 0]},
     ],
     'Jolteon': [
         {'id': 'velocitat', 'nom': 'Més ràpid',
-         'desc': 'Corre més ràpid (+1 per nivell)', 'costs': [5, 10, 15]},
+         'desc': 'Corre més ràpid (+1 per nivell)', 'costs': [0, 0, 0]},
         {'id': 'planeig', 'nom': 'Planeig',
-         'desc': 'Cau més a poc a poc', 'costs': [6, 12]},
+         'desc': 'Cau més a poc a poc', 'costs': [0, 0]},
         {'id': 'cos_agil', 'nom': 'Cos àgil',
-         'desc': 'Hitbox més petita: més difícil tocar-lo', 'costs': [7, 14]},
+         'desc': 'Hitbox més petita: més difícil tocar-lo', 'costs': [0, 0]},
         {'id': 'imant', 'nom': 'Imant',
-         'desc': 'Atrau les pokeballs des de més lluny', 'costs': [5, 10, 15]},
+         'desc': 'Atrau les pokeballs des de més lluny', 'costs': [0, 0, 0]},
         {'id': 'plasma', 'nom': 'Ona de plasma',
-         'desc': 'Desbloqueja atacs. Especial C/K: anell que travessa', 'costs': [10, 18, 28]},
+         'desc': 'Desbloqueja atacs. Especial C/K: anell que travessa', 'costs': [0, 0, 0]},
     ],
     'Flareon': [
         {'id': 'salt_alt', 'nom': 'Salt alt',
-         'desc': 'El primer salt arriba més amunt', 'costs': [5, 10, 15]},
+         'desc': 'El primer salt arriba més amunt', 'costs': [0, 0, 0]},
         {'id': 'doble_fort', 'nom': 'Doble salt potent',
-         'desc': 'El segon salt és més fort', 'costs': [6, 12]},
+         'desc': 'El segon salt és més fort', 'costs': [0, 0]},
         {'id': 'mal_boss', 'nom': 'Foc intens',
-         'desc': 'Fa +1 de mal al boss per nivell', 'costs': [12, 22]},
+         'desc': 'Fa +1 de mal per nivell (enemics i boss)', 'costs': [0, 0]},
         {'id': 'enemics_lents', 'nom': 'Enemics lents',
-         'desc': 'Els enemics volen més lents', 'costs': [5, 10]},
+         'desc': 'Els enemics volen més lents', 'costs': [0, 0]},
         {'id': 'foc', 'nom': 'Cometa de foc',
-         'desc': 'Desbloqueja atacs. Especial C/K: cometa explosiu', 'costs': [10, 18, 28]},
+         'desc': 'Desbloqueja atacs. Especial C/K: cometa explosiu', 'costs': [0, 0, 0]},
     ],
 }
 
@@ -1901,8 +1921,8 @@ def make_pikachu():
     idle = pygame.image.load('assets/pikachu.png').convert_alpha()
 
     run = [
-        pygame.image.load('assets/pikachu_corre13.png').convert_alpha(),
-        pygame.image.load('assets/pikachu_corre23.png').convert_alpha()
+        pygame.image.load('assets/pikachu_corre1.png').convert_alpha(),
+        pygame.image.load('assets/pikachu_corre2.png').convert_alpha()
     ]
 
     if os.path.exists('assets/baix.png'):
@@ -2260,6 +2280,7 @@ load_sfx()
 load_save()
 load_records()
 load_medals()
+load_progress()
 
 
 def enemy_hitbox_size(kind):
@@ -5221,7 +5242,7 @@ def show_A():
             ('Pausa = P o ESC', WHITE),
             ('Silenci = N', WHITE),
             ('Canviar de personatge = 1, 2, 3 o TAB', WHITE),
-            ('En completar un nivell: botons amb el ratolí', WHITE),
+            ('Entre nivells: B = botiga de millores', WHITE),
             ('Dificultat: en prémer JUGAR (o D al menú)', WHITE),
             ('Medalles: icona de baix a la dreta del menú (o M)', WHITE),
             ('Hi ha doble salt', WHITE),
@@ -5237,33 +5258,19 @@ def show_A():
     pygame.display.flip()
 
 
-# ---------------------------------------------------------------
-# NIVELL COMPLETAT: NOMÉS ES POT CONTINUAR AMB BOTONS (RATOLÍ)
-# ---------------------------------------------------------------
-
-def get_victory_buttons(level):
-    """Botons de la pantalla de nivell completat (només es poden prémer amb el ratolí)."""
-
-    w, h = 380, 54
-    x = WIDTH // 2 - w // 2
-    y0 = 372
-
-    siguiente = 'LLUITAR CONTRA EL BOSS' if level + 1 == BOSS_LEVEL else 'SEGÜENT NIVELL'
-
-    return [
-        ('next', siguiente, pygame.Rect(x, y0, w, h)),
-        ('retry', 'TORNAR A INTENTAR', pygame.Rect(x, y0 + 68, w, h)),
-        ('shop', 'BOTIGA', pygame.Rect(x, y0 + 136, w, h)),
-    ]
-
-
 def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
                         level, points_gained=0, points_total=0,
                         best_time=None, is_record=False):
 
     screen.fill(BLACK)
 
-    font = _font(44)
+    font = _font(50)
+
+    next_text = (
+        'ENTER - Lluitar contra el BOSS'
+        if level + 1 == BOSS_LEVEL
+        else 'ENTER - Següent Nivell'
+    )
 
     if best_time is None:
         record_line = ('', WHITE)
@@ -5279,39 +5286,14 @@ def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
             (f'Punts: +{points_gained}  (total {points_total})', GOLD),
             (f'Time: {time_taken:.2f} seconds', WHITE),
             record_line,
+            (next_text, WHITE),
+            ('ESPAI - Tornar al Nivell', WHITE),
+            ('B - Botiga: millorar habilitats', GOLD),
         ],
         font,
-        40,
-        56
+        HEIGHT // 6,
+        62
     )
-
-    mouse_pos = pygame.mouse.get_pos()
-
-    for name, label, rect in get_victory_buttons(level):
-
-        hover = rect.collidepoint(mouse_pos)
-
-        surf = pygame.Surface(rect.size, pygame.SRCALPHA)
-
-        surf.fill((60, 60, 60, 230) if hover else (20, 20, 20, 220))
-
-        screen.blit(surf, rect.topleft)
-
-        pygame.draw.rect(
-            screen,
-            GOLD if name == 'shop' else YELLOW,
-            rect,
-            4 if hover else 2,
-            border_radius=8
-        )
-
-        text = _font(30, True).render(label, True, WHITE)
-
-        screen.blit(
-            text,
-            (rect.centerx - text.get_width() // 2,
-             rect.centery - text.get_height() // 2)
-        )
 
     pygame.display.flip()
 
@@ -6749,6 +6731,7 @@ async def game():
                     add_points(points_gained)
 
                     PROGRESS['level'] = max(PROGRESS['level'] or 0, gs.level)
+                    save_progress()
 
                     is_record, best_time = submit_record(record_key(gs.level), time_taken)
 
@@ -6777,9 +6760,6 @@ async def game():
                     shop_ability = 0
                     shop_msg = ''
 
-                    # els clics dels primers 400 ms s'ignoren (evita passar de nivell per error)
-                    victory_at = pygame.time.get_ticks()
-
                     while waiting:
 
                         await asyncio.sleep(0)
@@ -6793,23 +6773,16 @@ async def game():
 
                             show_shop(shop_char, shop_ability, shop_msg, shop_msg_ok)
 
-                        else:
-
-                            draw_victory()      # es repinta cada fotograma perquè els botons reaccionin al ratolí
-
-                        action = None
-
                         for event in pygame.event.get():
 
                             if event.type == pygame.QUIT:
                                 delete_save_on_exit()
                                 return
 
-                            if in_shop:
+                            if event.type != pygame.KEYDOWN:
+                                continue
 
-                                # a la botiga es continua navegant amb el teclat
-                                if event.type != pygame.KEYDOWN:
-                                    continue
+                            if in_shop:
 
                                 n_abilities = len(get_abilities(CHARACTERS[shop_char].nom))
 
@@ -6847,44 +6820,48 @@ async def game():
 
                                     in_shop = False
 
-                                    victory_at = pygame.time.get_ticks()
+                                    draw_victory()
 
                                 continue
 
-                            # --- pantalla de nivell completat: NOMÉS ES POT FER CLIC ---
-                            # (el teclat ja no serveix ni per passar de nivell ni per repetir-lo)
-                            if (
-                                event.type == pygame.MOUSEBUTTONDOWN
-                                and event.button == 1
-                                and pygame.time.get_ticks() - victory_at >= 400
-                            ):
+                            if event.key == pygame.K_b:
 
-                                for name, label, rect in get_victory_buttons(gs.level):
+                                in_shop = True
+                                shop_char = selected
+                                shop_ability = 0
+                                shop_msg = ''
 
-                                    if rect.collidepoint(event.pos):
-                                        action = name
+                            # Següent nivell ara amb ENTER
+                            if event.key == pygame.K_RETURN:
 
-                        if action == 'shop':
+                                gs.reset(gs.level + 1)
 
-                            in_shop = True
-                            shop_char = selected
-                            shop_ability = 0
-                            shop_msg = ''
+                                gs.start_time = time.time()
 
-                        elif action in ('next', 'retry'):
+                                waiting = False
 
-                            gs.reset(gs.level + 1 if action == 'next' else gs.level)
+                                prev_on_ground = True
 
-                            gs.start_time = time.time()
+                                start_fade_in()
 
-                            waiting = False
+                                play_sfx('iniciar_partida')
+                                play_music('assets/lluita.ogg')
 
-                            prev_on_ground = True
+                            # Reintentar mateix nivell ara amb ESPAI
+                            if event.key == pygame.K_SPACE:
 
-                            start_fade_in()
+                                gs.reset(gs.level)
 
-                            play_sfx('iniciar_partida')
-                            play_music('assets/lluita.ogg')
+                                gs.start_time = time.time()
+
+                                waiting = False
+
+                                prev_on_ground = True
+
+                                start_fade_in()
+
+                                play_sfx('iniciar_partida')
+                                play_music('assets/lluita.ogg')
 
             # --- compta les morts de la partida (per a la medalla TOP) ---
             # (abans de try_revive, que pot fer que el personatge reviscoli)
