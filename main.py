@@ -30,65 +30,46 @@ def music_file(path):
 # refrescar la pàgina); a l'escriptori, en un fitxer .json.
 # ---------------------------------------------------------------
 
-def _browser_storages():
-    """Prova les dues vies habituals d'accedir al localStorage en Pygbag."""
-    if not IS_WEB:
-        return []
-    storages = []
-    try:
-        import platform
-        storages.append(platform.window.localStorage)
-    except Exception:
-        pass
-    try:
-        from js import localStorage
-        if all(localStorage is not item for item in storages):
-            storages.append(localStorage)
-    except Exception:
-        pass
-    return storages
-
-
 def persist_load(key, filename):
-    """Carrega primer del localStorage del navegador i després del JSON."""
-    for storage in _browser_storages():
+    """Retorna les dades desades (o None si no n'hi ha)."""
+
+    if IS_WEB:
+
         try:
-            raw = storage.getItem(key)
+            import platform
+            raw = platform.window.localStorage.getItem(key)
             if raw is not None and str(raw) not in ('', 'null', 'undefined'):
                 return json.loads(str(raw))
-        except Exception as exc:
-            print(f'[SAVE] No s’ha pogut llegir localStorage ({key}): {exc}')
+        except Exception:
+            pass
 
     try:
         if os.path.exists(filename):
             with open(filename, 'r', encoding='utf-8') as f:
                 return json.load(f)
-    except (OSError, ValueError, TypeError) as exc:
-        print(f'[SAVE] No s’ha pogut llegir {filename}: {exc}')
+    except (OSError, ValueError, TypeError):
+        pass
+
     return None
 
 
 def persist_save(key, filename, data):
-    """Desa al localStorage (web) i al fitxer JSON (escriptori)."""
-    raw = json.dumps(data, ensure_ascii=False)
-    saved_in_browser = False
-    for storage in _browser_storages():
-        try:
-            storage.setItem(key, raw)
-            saved_in_browser = True
-            break
-        except Exception as exc:
-            print(f'[SAVE] No s’ha pogut escriure localStorage ({key}): {exc}')
 
-    if not IS_WEB or not saved_in_browser:
-        try:
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(json.dumps(data, ensure_ascii=False, indent=2))
-        except OSError as exc:
-            print(f'[SAVE] No s’ha pogut escriure {filename}: {exc}')
+    text = json.dumps(data, ensure_ascii=False, indent=2)
 
-    if IS_WEB and not saved_in_browser:
-        print('[SAVE] AVÍS: les dades no s’han pogut desar al navegador.')
+    if IS_WEB:
+
+        try:
+            import platform
+            platform.window.localStorage.setItem(key, text)
+        except Exception:
+            pass
+
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(text)
+    except OSError:
+        pass
 
 
 AUDIO_LOG = []
@@ -5240,7 +5221,7 @@ def show_A():
             ('Pausa = P o ESC', WHITE),
             ('Silenci = N', WHITE),
             ('Canviar de personatge = 1, 2, 3 o TAB', WHITE),
-            ('Entre nivells: B = botiga de millores', WHITE),
+            ('En completar un nivell: botons amb el ratolí', WHITE),
             ('Dificultat: en prémer JUGAR (o D al menú)', WHITE),
             ('Medalles: icona de baix a la dreta del menú (o M)', WHITE),
             ('Hi ha doble salt', WHITE),
@@ -5256,19 +5237,33 @@ def show_A():
     pygame.display.flip()
 
 
+# ---------------------------------------------------------------
+# NIVELL COMPLETAT: NOMÉS ES POT CONTINUAR AMB BOTONS (RATOLÍ)
+# ---------------------------------------------------------------
+
+def get_victory_buttons(level):
+    """Botons de la pantalla de nivell completat (només es poden prémer amb el ratolí)."""
+
+    w, h = 380, 54
+    x = WIDTH // 2 - w // 2
+    y0 = 372
+
+    siguiente = 'LLUITAR CONTRA EL BOSS' if level + 1 == BOSS_LEVEL else 'SEGÜENT NIVELL'
+
+    return [
+        ('next', siguiente, pygame.Rect(x, y0, w, h)),
+        ('retry', 'TORNAR A INTENTAR', pygame.Rect(x, y0 + 68, w, h)),
+        ('shop', 'BOTIGA', pygame.Rect(x, y0 + 136, w, h)),
+    ]
+
+
 def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
                         level, points_gained=0, points_total=0,
                         best_time=None, is_record=False):
 
     screen.fill(BLACK)
 
-    font = _font(50)
-
-    next_text = (
-        'ENTER - Lluitar contra el BOSS'
-        if level + 1 == BOSS_LEVEL
-        else 'ENTER - Següent Nivell'
-    )
+    font = _font(44)
 
     if best_time is None:
         record_line = ('', WHITE)
@@ -5284,14 +5279,39 @@ def show_victory_screen(time_taken, collected_pokeballs, total_pokeballs,
             (f'Punts: +{points_gained}  (total {points_total})', GOLD),
             (f'Time: {time_taken:.2f} seconds', WHITE),
             record_line,
-            (next_text, WHITE),
-            ('ESPAI - Tornar al Nivell', WHITE),
-            ('B - Botiga: millorar habilitats', GOLD),
         ],
         font,
-        HEIGHT // 6,
-        62
+        40,
+        56
     )
+
+    mouse_pos = pygame.mouse.get_pos()
+
+    for name, label, rect in get_victory_buttons(level):
+
+        hover = rect.collidepoint(mouse_pos)
+
+        surf = pygame.Surface(rect.size, pygame.SRCALPHA)
+
+        surf.fill((60, 60, 60, 230) if hover else (20, 20, 20, 220))
+
+        screen.blit(surf, rect.topleft)
+
+        pygame.draw.rect(
+            screen,
+            GOLD if name == 'shop' else YELLOW,
+            rect,
+            4 if hover else 2,
+            border_radius=8
+        )
+
+        text = _font(30, True).render(label, True, WHITE)
+
+        screen.blit(
+            text,
+            (rect.centerx - text.get_width() // 2,
+             rect.centery - text.get_height() // 2)
+        )
 
     pygame.display.flip()
 
@@ -6757,6 +6777,9 @@ async def game():
                     shop_ability = 0
                     shop_msg = ''
 
+                    # els clics dels primers 400 ms s'ignoren (evita passar de nivell per error)
+                    victory_at = pygame.time.get_ticks()
+
                     while waiting:
 
                         await asyncio.sleep(0)
@@ -6770,16 +6793,23 @@ async def game():
 
                             show_shop(shop_char, shop_ability, shop_msg, shop_msg_ok)
 
+                        else:
+
+                            draw_victory()      # es repinta cada fotograma perquè els botons reaccionin al ratolí
+
+                        action = None
+
                         for event in pygame.event.get():
 
                             if event.type == pygame.QUIT:
                                 delete_save_on_exit()
                                 return
 
-                            if event.type != pygame.KEYDOWN:
-                                continue
-
                             if in_shop:
+
+                                # a la botiga es continua navegant amb el teclat
+                                if event.type != pygame.KEYDOWN:
+                                    continue
 
                                 n_abilities = len(get_abilities(CHARACTERS[shop_char].nom))
 
@@ -6817,48 +6847,44 @@ async def game():
 
                                     in_shop = False
 
-                                    draw_victory()
+                                    victory_at = pygame.time.get_ticks()
 
                                 continue
 
-                            if event.key == pygame.K_b:
+                            # --- pantalla de nivell completat: NOMÉS ES POT FER CLIC ---
+                            # (el teclat ja no serveix ni per passar de nivell ni per repetir-lo)
+                            if (
+                                event.type == pygame.MOUSEBUTTONDOWN
+                                and event.button == 1
+                                and pygame.time.get_ticks() - victory_at >= 400
+                            ):
 
-                                in_shop = True
-                                shop_char = selected
-                                shop_ability = 0
-                                shop_msg = ''
+                                for name, label, rect in get_victory_buttons(gs.level):
 
-                            # Següent nivell ara amb ENTER
-                            if event.key == pygame.K_RETURN:
+                                    if rect.collidepoint(event.pos):
+                                        action = name
 
-                                gs.reset(gs.level + 1)
+                        if action == 'shop':
 
-                                gs.start_time = time.time()
+                            in_shop = True
+                            shop_char = selected
+                            shop_ability = 0
+                            shop_msg = ''
 
-                                waiting = False
+                        elif action in ('next', 'retry'):
 
-                                prev_on_ground = True
+                            gs.reset(gs.level + 1 if action == 'next' else gs.level)
 
-                                start_fade_in()
+                            gs.start_time = time.time()
 
-                                play_sfx('iniciar_partida')
-                                play_music('assets/lluita.ogg')
+                            waiting = False
 
-                            # Reintentar mateix nivell ara amb ESPAI
-                            if event.key == pygame.K_SPACE:
+                            prev_on_ground = True
 
-                                gs.reset(gs.level)
+                            start_fade_in()
 
-                                gs.start_time = time.time()
-
-                                waiting = False
-
-                                prev_on_ground = True
-
-                                start_fade_in()
-
-                                play_sfx('iniciar_partida')
-                                play_music('assets/lluita.ogg')
+                            play_sfx('iniciar_partida')
+                            play_music('assets/lluita.ogg')
 
             # --- compta les morts de la partida (per a la medalla TOP) ---
             # (abans de try_revive, que pot fer que el personatge reviscoli)
